@@ -13,101 +13,85 @@ export default function ShorestackLogo({
   color = '#1b4965',
   size = 'md',
 }: ShorestackLogoProps) {
-  // Size mappings
   const sizeMap = {
-    sm: { mark: 24, wordmark: 14, text: 12 },
-    md: { mark: 32, wordmark: 18, text: 14 },
-    lg: { mark: 48, wordmark: 28, text: 20 },
+    sm: { mark: 20, fontSize: '0.875rem', gap: '0.375rem' },
+    md: { mark: 28, fontSize: '1.125rem', gap: '0.5rem' },
+    lg: { mark: 40, fontSize: '1.75rem', gap: '0.625rem' },
   };
 
   const dims = sizeMap[size];
 
-  // Wave mark: 11 sinusoidal lines in a square frame
+  // Wave mark: simplified wave icon matching the actual Shorestack logo
   const WaveMark = () => {
-    const width = dims.mark;
-    const height = dims.mark;
-    const lineCount = 11;
-    const lineSpacing = width / (lineCount - 1);
-    const amplitude = height * 0.3;
-    const frequency = Math.PI / height;
-
+    const s = dims.mark;
     return (
-      <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} fill="none">
-        {/* Generate 11 sinusoidal lines */}
-        {Array.from({ length: lineCount }).map((_, i) => {
-          const x = i * lineSpacing;
-          const points = Array.from({ length: 100 }).map((_, j) => {
-            const y = (height / 2) + amplitude * Math.sin(j * frequency);
-            return `${x},${y}`;
-          }).join(' ');
-
+      <svg width={s} height={s} viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+        {/* Top frame line */}
+        <line x1="2" y1="4" x2="38" y2="4" stroke={color} strokeWidth="1.5" />
+        {/* 11 wave lines */}
+        {Array.from({ length: 11 }).map((_, i) => {
+          const y = 6 + i * 2.8;
+          const amp = 3 + Math.sin((i / 10) * Math.PI) * 4;
+          const d = `M 2 ${y} Q 12 ${y - amp}, 20 ${y} Q 28 ${y + amp}, 38 ${y}`;
           return (
-            <polyline
+            <path
               key={i}
-              points={points}
+              d={d}
               stroke={color}
-              strokeWidth="0.5"
-              vectorEffect="non-scaling-stroke"
+              strokeWidth="1"
+              fill="none"
             />
           );
         })}
+        {/* Bottom frame line */}
+        <line x1="2" y1="37" x2="38" y2="37" stroke={color} strokeWidth="1.5" />
       </svg>
     );
   };
-
-  // Wordmark text
-  const Wordmark = ({ text, color: textColor }: { text: string; color: string }) => (
-    <svg
-      width={dims.wordmark * 4}
-      height={dims.wordmark}
-      viewBox="0 0 120 30"
-      fill="none"
-      fontSize={dims.wordmark}
-      fontFamily="Inter, sans-serif"
-      fontWeight="600"
-    >
-      <text x="0" y="22" fill={textColor} fontSize={dims.wordmark} fontFamily="Inter, sans-serif" fontWeight="600">
-        {text}
-      </text>
-    </svg>
-  );
 
   if (variant === 'mark') {
     return <WaveMark />;
   }
 
+  // Build the text: "SHORESTACK" + optional subbrand like "VAULT"
+  const brandText = subbrand ? `SHORESTACK ${subbrand.toUpperCase()}` : 'SHORESTACK';
+
   if (variant === 'stacked') {
     return (
-      <div className="flex flex-col items-center gap-2">
+      <div className="flex flex-col items-center" style={{ gap: dims.gap }}>
         <WaveMark />
-        <div className="text-center">
-          <div style={{ fontSize: dims.wordmark, fontFamily: 'Inter, sans-serif', fontWeight: 600, color }}>
-            shorestack
-          </div>
-          {subbrand && (
-            <div style={{ fontSize: dims.text * 0.75, fontFamily: 'Inter, sans-serif', color: '#5fa8a0', marginTop: '2px' }}>
-              {subbrand}
-            </div>
-          )}
-        </div>
+        <span
+          style={{
+            fontSize: dims.fontSize,
+            fontFamily: 'Inter, sans-serif',
+            fontWeight: 700,
+            color,
+            letterSpacing: '0.05em',
+            lineHeight: 1,
+          }}
+        >
+          {brandText}
+        </span>
       </div>
     );
   }
 
-  // horizontal
+  // horizontal — matches shorestack.io nav: [wave icon] SHORESTACK VAULT
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex items-center" style={{ gap: dims.gap }}>
       <WaveMark />
-      <div>
-        <div style={{ fontSize: dims.wordmark, fontFamily: 'Inter, sans-serif', fontWeight: 600, color, lineHeight: 1 }}>
-          shorestack
-        </div>
-        {subbrand && (
-          <div style={{ fontSize: dims.text * 0.65, fontFamily: 'Inter, sans-serif', color: '#5fa8a0', lineHeight: 1, marginTop: '2px' }}>
-            {subbrand}
-          </div>
-        )}
-      </div>
+      <span
+        style={{
+          fontSize: dims.fontSize,
+          fontFamily: 'Inter, sans-serif',
+          fontWeight: 700,
+          color,
+          letterSpacing: '0.05em',
+          lineHeight: 1,
+        }}
+      >
+        {brandText}
+      </span>
     </div>
   );
 }
