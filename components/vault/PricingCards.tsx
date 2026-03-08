@@ -10,53 +10,36 @@ interface PricingCardsProps {
 
 const plans = [
   {
-    id: 'individual' as PlanType,
-    name: 'Individual',
-    price: '$3.99',
+    id: 'personal' as PlanType,
+    name: 'Personal',
+    price: '$0.99',
     period: '/month',
     features: [
-      '1 user login',
       'Unlimited vault items',
-      '5 GB document storage',
+      '1 GB document storage',
       'AES-256 zero-knowledge encryption',
       'Password generator',
       'Audit activity log',
+      'Logins, notes, cards, identities',
     ],
     cta: 'Get Started',
-    priceKey: 'individual_monthly',
+    priceKey: 'personal_monthly',
     highlight: true,
   },
   {
-    id: 'team' as PlanType,
-    name: 'Team',
-    price: '$6.99',
+    id: 'plus' as PlanType,
+    name: 'Plus',
+    price: '$1.99',
     period: '/month',
     features: [
-      'Up to 5 user logins',
-      'Everything in Individual',
+      'Everything in Personal',
       '10 GB document storage',
       'Shared vaults',
-      'Team management',
-      'Admin controls',
+      'Priority support',
+      'Perfect for families & teams',
     ],
-    cta: 'Get Started',
-    priceKey: 'team_monthly',
-  },
-  {
-    id: 'custom' as PlanType,
-    name: 'Custom',
-    price: 'Contact Us',
-    period: '',
-    features: [
-      'Unlimited users',
-      'Unlimited storage',
-      'Dedicated support',
-      'Custom integrations',
-      'SLA & compliance',
-      'On-prem available',
-    ],
-    cta: 'Contact Sales',
-    contactUrl: 'mailto:brandon@daysllc.com?subject=ShoreStack%20Vault%20Custom%20Plan',
+    cta: 'Upgrade to Plus',
+    priceKey: 'plus_monthly',
   },
 ];
 
@@ -86,12 +69,10 @@ export default function PricingCards({ currentPlan, onManageBilling }: PricingCa
 
   return (
     <div className="space-y-4">
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 max-w-2xl">
         {plans.map((plan) => {
           const isCurrent = plan.id === currentPlan;
-          const isUpgrade = (currentPlan === 'individual' && plan.id === 'team');
-          const isDowngrade = (currentPlan === 'team' && plan.id === 'individual') ||
-            (currentPlan === 'custom');
+          const isUpgrade = currentPlan === 'personal' && plan.id === 'plus';
 
           return (
             <div
@@ -111,7 +92,7 @@ export default function PricingCards({ currentPlan, onManageBilling }: PricingCa
               <h3 className="text-lg font-semibold text-[#1b4965]">{plan.name}</h3>
               <div className="mt-2 flex items-baseline gap-1">
                 <span className="text-2xl font-bold text-[#1b4965]">{plan.price}</span>
-                {plan.period && <span className="text-sm text-[#1b4965]/60">{plan.period}</span>}
+                <span className="text-sm text-[#1b4965]/60">{plan.period}</span>
               </div>
 
               <ul className="mt-4 space-y-2">
@@ -133,40 +114,29 @@ export default function PricingCards({ currentPlan, onManageBilling }: PricingCa
                   >
                     Current Plan
                   </button>
-                ) : plan.contactUrl ? (
-                  <a
-                    href={plan.contactUrl}
-                    className="block w-full rounded-sm border border-[#1b4965]/15 px-4 py-2.5 text-center text-sm font-medium text-[#1b4965]/70 hover:bg-[#1b4965]/5"
+                ) : isUpgrade && plan.priceKey ? (
+                  <button
+                    onClick={() => handleUpgrade(plan.priceKey!)}
+                    disabled={loading === plan.priceKey}
+                    className="w-full rounded-sm bg-[#5fa8a0] px-4 py-2.5 text-sm font-medium text-white hover:bg-[#4d8f87] disabled:opacity-50"
                   >
-                    {plan.cta}
-                  </a>
-                ) : isDowngrade ? (
+                    {loading === plan.priceKey ? 'Redirecting...' : plan.cta}
+                  </button>
+                ) : (
                   <button
                     onClick={onManageBilling}
                     className="w-full rounded-sm border border-[#1b4965]/15 px-4 py-2.5 text-sm font-medium text-[#1b4965]/70 hover:bg-[#1b4965]/5"
                   >
                     Manage Billing
                   </button>
-                ) : (isUpgrade || !isCurrent) && plan.priceKey ? (
-                  <button
-                    onClick={() => handleUpgrade(plan.priceKey!)}
-                    disabled={loading === plan.priceKey}
-                    className={`w-full rounded-sm px-4 py-2.5 text-sm font-medium text-white disabled:opacity-50 ${
-                      plan.highlight
-                        ? 'bg-[#5fa8a0] hover:bg-[#4d8f87]'
-                        : 'bg-[#1b4965]/40 hover:bg-[#1b4965]/50'
-                    }`}
-                  >
-                    {loading === plan.priceKey ? 'Redirecting...' : plan.cta}
-                  </button>
-                ) : null}
+                )}
               </div>
             </div>
           );
         })}
       </div>
 
-      {(currentPlan === 'individual' || currentPlan === 'team') && (
+      {currentPlan && (
         <button
           onClick={onManageBilling}
           className="mt-2 text-sm text-[#5fa8a0] underline hover:text-[#4d8f87]"
@@ -174,6 +144,10 @@ export default function PricingCards({ currentPlan, onManageBilling }: PricingCa
           Manage subscription &amp; billing in Stripe
         </button>
       )}
+
+      <p className="text-xs text-[#1b4965]/50 mt-4">
+        Need more than 10 GB? <a href="mailto:brandon@daysllc.com?subject=ShoreStack%20Vault%20Custom%20Storage" className="text-[#5fa8a0] hover:underline">Contact us</a> for custom storage limits.
+      </p>
     </div>
   );
 }

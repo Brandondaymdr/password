@@ -226,7 +226,7 @@ function SettingsContent() {
         <section className="rounded-sm border border-[#1b4965]/15 bg-white p-6">
           <h2 className="mb-4 text-sm font-semibold uppercase tracking-wider text-[#1b4965]">Account</h2>
           <div className="space-y-3 text-sm">
-            <div className="flex justify-between"><span className="text-[#1b4965]/60">Plan</span><span className="capitalize text-[#5fa8a0]">{profile?.plan || 'individual'}</span></div>
+            <div className="flex justify-between"><span className="text-[#1b4965]/60">Plan</span><span className="capitalize text-[#5fa8a0]">{profile?.plan || 'personal'}</span></div>
             <div className="flex justify-between"><span className="text-[#1b4965]/60">KDF Iterations</span><span className="font-mono text-[#1b4965]">{profile?.kdf_iterations?.toLocaleString()}</span></div>
             <div className="flex justify-between"><span className="text-[#1b4965]/60">Password Hint</span><span className="text-[#1b4965]">{profile?.hint || 'None set'}</span></div>
           </div>
@@ -235,7 +235,7 @@ function SettingsContent() {
         {/* Subscription & Pricing */}
         <section className="rounded-sm border border-[#1b4965]/15 bg-white p-6">
           <h2 className="mb-4 text-sm font-semibold uppercase tracking-wider text-[#1b4965]">Subscription</h2>
-          <PricingCards currentPlan={profile?.plan || 'individual'} onManageBilling={handleManageBilling} />
+          <PricingCards currentPlan={profile?.plan || 'personal'} onManageBilling={handleManageBilling} />
         </section>
 
         {/* Change Master Password */}

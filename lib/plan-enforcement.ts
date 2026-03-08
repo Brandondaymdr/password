@@ -1,6 +1,8 @@
 // ============================================
 // ShoreStack Vault — Plan Enforcement
 // ============================================
+// Two tiers: Personal ($0.99/mo, 1 GB) and Plus ($1.99/mo, 10 GB).
+// All plans have unlimited vault items. Differentiated by storage and features.
 
 import { PLAN_LIMITS, type PlanType } from '@/types/vault';
 
@@ -11,25 +13,12 @@ export interface PlanCheckResult {
   current?: number;
 }
 
-export function checkItemLimit(plan: PlanType, currentCount: number): PlanCheckResult {
-  const limit = PLAN_LIMITS[plan].maxItems;
-  if (currentCount >= limit) {
-    return {
-      allowed: false,
-      reason: `You've reached the ${limit}-item limit on the ${plan} plan. Upgrade to add more.`,
-      limit,
-      current: currentCount,
-    };
-  }
-  return { allowed: true, limit, current: currentCount };
-}
-
 export function checkStorageLimit(plan: PlanType, currentMB: number, newFileMB: number): PlanCheckResult {
   const limitMB = PLAN_LIMITS[plan].maxStorageMB;
   if (currentMB + newFileMB > limitMB) {
     return {
       allowed: false,
-      reason: `This upload would exceed your ${limitMB >= 1024 ? `${limitMB / 1024} GB` : `${limitMB} MB`} storage limit. Upgrade for more space.`,
+      reason: `This upload would exceed your ${limitMB >= 1024 ? `${limitMB / 1024} GB` : `${limitMB} MB`} storage limit. Upgrade to Plus for 10 GB.`,
       limit: limitMB,
       current: currentMB,
     };
@@ -37,9 +26,16 @@ export function checkStorageLimit(plan: PlanType, currentMB: number, newFileMB: 
   return { allowed: true, limit: limitMB, current: currentMB };
 }
 
+export function checkSharedVaultAccess(plan: PlanType): PlanCheckResult {
+  if (!PLAN_LIMITS[plan].sharedVaults) {
+    return { allowed: false, reason: 'Shared vaults require a Plus plan.' };
+  }
+  return { allowed: true };
+}
+
 export function checkAuditAccess(plan: PlanType): PlanCheckResult {
   if (!PLAN_LIMITS[plan].auditLog) {
-    return { allowed: false, reason: 'Audit log requires an Individual or Team plan.' };
+    return { allowed: false, reason: 'Audit log requires a paid plan.' };
   }
   return { allowed: true };
 }

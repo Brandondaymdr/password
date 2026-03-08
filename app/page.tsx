@@ -73,28 +73,33 @@ export default function LandingPage() {
             Choose the plan that fits your needs. No free tier, no credit card tricks.
           </p>
 
-          <div className="grid md:grid-cols-3 gap-6">
-            {/* Individual */}
-            <div className="rounded-sm border-2 border-[#5fa8a0] bg-white p-8">
-              <h3 className="text-xl font-semibold mb-2">Individual</h3>
-              <div className="text-3xl font-bold mb-1">$3.99</div>
+          <div className="grid md:grid-cols-2 gap-6 max-w-3xl mx-auto">
+            {/* Personal */}
+            <div className="relative rounded-sm border-2 border-[#5fa8a0] bg-white p-8">
+              <span className="absolute -top-2.5 left-4 rounded-full bg-[#5fa8a0] px-2.5 py-0.5 text-xs font-semibold text-white">Most Popular</span>
+              <h3 className="text-xl font-semibold mb-2">Personal</h3>
+              <div className="text-3xl font-bold mb-1">$0.99</div>
               <div className="text-sm text-[#1b4965]/60 mb-6">/month</div>
               <ul className="space-y-3 mb-8 text-sm">
-                <li className="flex items-start gap-2">
-                  <span className="text-[#5fa8a0]">✓</span>
-                  <span>1 user login</span>
-                </li>
                 <li className="flex items-start gap-2">
                   <span className="text-[#5fa8a0]">✓</span>
                   <span>Unlimited vault items</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-[#5fa8a0]">✓</span>
-                  <span>5 GB document storage</span>
+                  <span>1 GB document storage</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-[#5fa8a0]">✓</span>
-                  <span>AES-256 encryption</span>
+                  <span>AES-256 zero-knowledge encryption</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-[#5fa8a0]">✓</span>
+                  <span>Password generator</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-[#5fa8a0]">✓</span>
+                  <span>Audit activity log</span>
                 </li>
               </ul>
               <Link href="/signup" className="block w-full rounded-sm bg-[#5fa8a0] px-4 py-3 text-center font-medium text-white transition-colors hover:bg-[#4d8f87]">
@@ -102,62 +107,37 @@ export default function LandingPage() {
               </Link>
             </div>
 
-            {/* Team */}
+            {/* Plus */}
             <div className="rounded-sm border border-[#1b4965]/15 bg-white p-8">
-              <h3 className="text-xl font-semibold mb-2">Team</h3>
-              <div className="text-3xl font-bold mb-1">$6.99</div>
+              <h3 className="text-xl font-semibold mb-2">Plus</h3>
+              <div className="text-3xl font-bold mb-1">$1.99</div>
               <div className="text-sm text-[#1b4965]/60 mb-6">/month</div>
               <ul className="space-y-3 mb-8 text-sm">
                 <li className="flex items-start gap-2">
                   <span className="text-[#5fa8a0]">✓</span>
-                  <span>Up to 5 users</span>
+                  <span>Everything in Personal</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-[#5fa8a0]">✓</span>
-                  <span>Unlimited items</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-[#5fa8a0]">✓</span>
-                  <span>10 GB storage</span>
+                  <span>10 GB document storage</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-[#5fa8a0]">✓</span>
                   <span>Shared vaults</span>
                 </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-[#5fa8a0]">✓</span>
+                  <span>Perfect for families &amp; teams</span>
+                </li>
               </ul>
-              <button className="block w-full rounded-sm border border-[#1b4965]/15 px-4 py-3 text-center font-medium text-[#1b4965] transition-colors hover:bg-[#1b4965]/5">
+              <Link href="/signup" className="block w-full rounded-sm border border-[#1b4965]/15 px-4 py-3 text-center font-medium text-[#1b4965] transition-colors hover:bg-[#1b4965]/5">
                 Get Started
-              </button>
-            </div>
-
-            {/* Custom */}
-            <div className="rounded-sm border border-[#1b4965]/15 bg-white p-8">
-              <h3 className="text-xl font-semibold mb-2">Custom</h3>
-              <div className="text-3xl font-bold mb-1">Contact Us</div>
-              <div className="text-sm text-[#1b4965]/60 mb-6">&nbsp;</div>
-              <ul className="space-y-3 mb-8 text-sm">
-                <li className="flex items-start gap-2">
-                  <span className="text-[#5fa8a0]">✓</span>
-                  <span>Unlimited users</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-[#5fa8a0]">✓</span>
-                  <span>Unlimited storage</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-[#5fa8a0]">✓</span>
-                  <span>Dedicated support</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-[#5fa8a0]">✓</span>
-                  <span>SLA & compliance</span>
-                </li>
-              </ul>
-              <a href="mailto:brandon@daysllc.com?subject=ShoreStack%20Vault%20Custom%20Plan" className="block w-full rounded-sm border border-[#1b4965]/15 px-4 py-3 text-center font-medium text-[#1b4965] transition-colors hover:bg-[#1b4965]/5">
-                Contact Sales
-              </a>
+              </Link>
             </div>
           </div>
+          <p className="text-center text-xs text-[#1b4965]/50 mt-6">
+            Need more than 10 GB? <a href="mailto:brandon@daysllc.com?subject=ShoreStack%20Vault%20Custom%20Storage" className="text-[#5fa8a0] hover:underline">Contact us</a> for custom storage.
+          </p>
         </div>
       </section>
 

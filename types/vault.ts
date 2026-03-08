@@ -4,7 +4,7 @@
 
 export type VaultItemType = 'login' | 'secure_note' | 'credit_card' | 'identity';
 
-export type PlanType = 'individual' | 'team' | 'custom';
+export type PlanType = 'personal' | 'plus';
 
 export type AuditAction = 'unlock' | 'view' | 'create' | 'edit' | 'delete' | 'export';
 
@@ -123,8 +123,7 @@ export interface PasswordOptions {
 
 // --- Plan Limits ---
 
-export const PLAN_LIMITS: Record<PlanType, { maxUsers: number; maxItems: number; maxStorageMB: number; auditLog: boolean; sharedVaults: boolean }> = {
-  individual: { maxUsers: 1, maxItems: Infinity, maxStorageMB: 5120, auditLog: true, sharedVaults: false },
-  team: { maxUsers: 5, maxItems: Infinity, maxStorageMB: 10240, auditLog: true, sharedVaults: true },
-  custom: { maxUsers: Infinity, maxItems: Infinity, maxStorageMB: Infinity, auditLog: true, sharedVaults: true },
+export const PLAN_LIMITS: Record<PlanType, { maxStorageMB: number; auditLog: boolean; sharedVaults: boolean }> = {
+  personal: { maxStorageMB: 1024, auditLog: true, sharedVaults: false },
+  plus: { maxStorageMB: 10240, auditLog: true, sharedVaults: true },
 };

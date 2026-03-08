@@ -84,7 +84,7 @@ export async function POST(request: Request) {
         if (userId) {
           await supabaseAdmin
             .from('profiles')
-            .update({ plan: 'individual' })
+            .update({ plan: 'personal' })
             .eq('id', userId);
         }
         break;

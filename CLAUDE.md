@@ -9,7 +9,7 @@
 
 **Brand:** Shorestack — Swiss-inspired, modernist, 1970s optical-art aesthetic
 **Target:** General consumers and small businesses moving away from expensive password manager subscriptions.
-**Monetization:** Paid SaaS (no free tier) — Individual ($3.99/mo) / Team ($6.99/mo) / Custom (contact sales) via Stripe.
+**Monetization:** Paid SaaS (no free tier) — Personal ($0.99/mo, 1 GB) / Plus ($1.99/mo, 10 GB) via Stripe.
 **Owner/Developer:** Brandon Day — Days Management LLC, Austin TX
 **Live URL:** https://password-mu.vercel.app
 **GitHub:** https://github.com/Brandondaymdr/password
@@ -89,7 +89,9 @@ CREATE TABLE profiles (
   kdf_salt        TEXT NOT NULL,
   kdf_iterations  INT DEFAULT 600000,
   hint            TEXT,
-  plan            TEXT DEFAULT 'individual' CHECK (plan IN ('individual', 'team', 'custom')),
+  vault_verifier     TEXT,
+  vault_verifier_iv  TEXT,
+  plan            TEXT DEFAULT 'personal' CHECK (plan IN ('personal', 'plus')),
   stripe_customer_id TEXT,
   created_at      TIMESTAMPTZ DEFAULT NOW()
 );
@@ -194,13 +196,12 @@ shorestack-vault/
 
 ## Pricing & Plans
 
-| Plan | Price | Users | Items | Storage | Audit | Shared Vaults |
-|---|---|---|---|---|---|---|
-| Individual | $3.99/mo | 1 | Unlimited | 5 GB | Yes | No |
-| Team | $6.99/mo | 5 | Unlimited | 10 GB | Yes | Yes |
-| Custom | Contact | Unlimited | Unlimited | Unlimited | Yes | Yes |
+| Plan | Price | Items | Storage | Audit | Shared Vaults |
+|---|---|---|---|---|---|
+| Personal | $0.99/mo | Unlimited | 1 GB | Yes | No |
+| Plus | $1.99/mo | Unlimited | 10 GB | Yes | Yes |
 
-There is **no free tier**. All new signups default to the Individual plan.
+There is **no free tier**. All new signups default to the Personal plan. Storage-based pricing — any number of users per account.
 
 ### Stripe Integration
 - **Checkout:** `/api/stripe/checkout` creates Checkout sessions, auto-creates Stripe customer
@@ -222,10 +223,10 @@ SUPABASE_SERVICE_ROLE_KEY=
 STRIPE_SECRET_KEY=
 STRIPE_WEBHOOK_SECRET=
 NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=
-STRIPE_INDIVIDUAL_MONTHLY_PRICE_ID=
-STRIPE_INDIVIDUAL_YEARLY_PRICE_ID=
-STRIPE_TEAM_MONTHLY_PRICE_ID=
-STRIPE_TEAM_YEARLY_PRICE_ID=
+STRIPE_PERSONAL_MONTHLY_PRICE_ID=
+STRIPE_PERSONAL_YEARLY_PRICE_ID=
+STRIPE_PLUS_MONTHLY_PRICE_ID=
+STRIPE_PLUS_YEARLY_PRICE_ID=
 
 # App
 NEXT_PUBLIC_APP_URL=https://password-mu.vercel.app

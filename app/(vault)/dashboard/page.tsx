@@ -304,7 +304,7 @@ export default function DashboardPage() {
 
             {/* Plan badge */}
             <span className="hidden rounded-full bg-[#5fa8a0]/10 px-2.5 py-0.5 text-xs font-medium text-[#5fa8a0] sm:inline">
-              {profile?.plan || 'individual'}
+              {profile?.plan || 'personal'}
             </span>
           </div>
 
