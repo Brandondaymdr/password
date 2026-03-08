@@ -307,6 +307,41 @@ export async function decryptFile(
   );
 }
 
+// --- Vault Verifier ---
+
+/**
+ * Known plaintext used to verify the master password is correct.
+ * During setup, this string is encrypted with the vault key and stored as vault_verifier.
+ * On unlock, we decrypt it — if it matches, the password is correct.
+ */
+const VAULT_VERIFIER_PLAINTEXT = 'SHORESTACK_VAULT_VERIFIED_v1';
+
+/**
+ * Create a vault verifier (encrypted known string) during master password setup.
+ */
+export async function createVaultVerifier(
+  vaultKey: CryptoKey
+): Promise<{ encrypted: string; iv: string }> {
+  return encryptItem({ verifier: VAULT_VERIFIER_PLAINTEXT }, vaultKey);
+}
+
+/**
+ * Verify the master password by decrypting the vault verifier.
+ * Returns true if the password is correct, false otherwise.
+ */
+export async function verifyVaultKey(
+  encrypted: string,
+  iv: string,
+  vaultKey: CryptoKey
+): Promise<boolean> {
+  try {
+    const data = (await decryptItem(encrypted, iv, vaultKey)) as { verifier: string };
+    return data.verifier === VAULT_VERIFIER_PLAINTEXT;
+  } catch {
+    return false;
+  }
+}
+
 // --- Utilities ---
 
 /**

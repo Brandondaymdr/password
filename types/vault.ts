@@ -15,6 +15,8 @@ export interface Profile {
   kdf_salt: string;
   kdf_iterations: number;
   hint: string | null;
+  vault_verifier: string | null;
+  vault_verifier_iv: string | null;
   plan: PlanType;
   stripe_customer_id: string | null;
   created_at: string;

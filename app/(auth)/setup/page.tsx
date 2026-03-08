@@ -1,8 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase';
-import { deriveVaultKey } from '@/lib/crypto';
+import { deriveVaultKey, createVaultVerifier } from '@/lib/crypto';
 import { VaultSession } from '@/lib/vault-session';
 import { useRouter } from 'next/navigation';
 import ShorestackLogo from '@/components/ui/ShorestackLogo';
@@ -16,6 +16,24 @@ export default function SetupPage() {
   const [strength, setStrength] = useState(0);
   const router = useRouter();
   const supabase = createClient();
+
+  // Redirect to dashboard if user already completed setup
+  useEffect(() => {
+    async function checkSetup() {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { router.push('/login'); return; }
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('vault_verifier')
+        .eq('id', user.id)
+        .single();
+      if (profile?.vault_verifier) {
+        router.push('/dashboard');
+      }
+    }
+    checkSetup();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function evaluateStrength(pw: string): number {
     let score = 0;
@@ -82,13 +100,21 @@ export default function SetupPage() {
       // Store vault key in memory session
       VaultSession.set(vaultKey);
 
-      // Save hint if provided
+      // Create vault verifier — encrypted known string to verify password on unlock
+      const { encrypted: verifier, iv: verifierIv } = await createVaultVerifier(vaultKey);
+
+      // Save verifier (and hint if provided) to profile
+      const profileUpdate: Record<string, string> = {
+        vault_verifier: verifier,
+        vault_verifier_iv: verifierIv,
+      };
       if (hint.trim()) {
-        await supabase
-          .from('profiles')
-          .update({ hint: hint.trim() })
-          .eq('id', user.id);
+        profileUpdate.hint = hint.trim();
       }
+      await supabase
+        .from('profiles')
+        .update(profileUpdate)
+        .eq('id', user.id);
 
       // Redirect to dashboard — vault is now unlocked
       router.push('/dashboard');

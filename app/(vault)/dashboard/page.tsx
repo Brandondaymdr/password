@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { createClient } from '@/lib/supabase';
-import { deriveVaultKey, decryptItem } from '@/lib/crypto';
+import { deriveVaultKey, decryptItem, verifyVaultKey } from '@/lib/crypto';
 import { VaultSession } from '@/lib/vault-session';
 import { useRouter } from 'next/navigation';
 import AddItemModal from '@/components/vault/AddItemModal';
@@ -85,6 +85,12 @@ export default function DashboardPage() {
     const { data: profileData } = await supabase.from('profiles').select('*').eq('id', user.id).single();
     if (profileData) setProfile(profileData);
 
+    // If vault_verifier is null, the user hasn't set up their master password yet
+    if (!profileData?.vault_verifier) {
+      router.push('/setup');
+      return;
+    }
+
     if (!VaultSession.isUnlocked()) {
       setNeedsMasterPassword(true);
       setLoading(false);
@@ -119,6 +125,16 @@ export default function DashboardPage() {
     try {
       if (!profile) throw new Error('Profile not loaded');
       const vaultKey = await deriveVaultKey(masterPassword, profile.kdf_salt, profile.kdf_iterations);
+
+      // Verify the master password using the vault verifier
+      if (profile.vault_verifier && profile.vault_verifier_iv) {
+        const isValid = await verifyVaultKey(profile.vault_verifier, profile.vault_verifier_iv, vaultKey);
+        if (!isValid) {
+          setError('Incorrect master password. Please try again.');
+          return;
+        }
+      }
+
       VaultSession.set(vaultKey);
 
       const { data: { user } } = await supabase.auth.getUser();
