@@ -1,15 +1,41 @@
-# VaultStack — Zero-Knowledge Password & Document Manager
+# ShoreStack Vault — Zero-Knowledge Password & Document Manager
 ## Claude Cowork Project File
 
 ---
 
 ## Project Overview
 
-**VaultStack** is a SaaS web application that replaces 1Password and similar password managers. It is a zero-knowledge encrypted vault where users store passwords, secure notes, credit cards, identities, and important documents. The server (Supabase) only ever stores AES-256 encrypted ciphertext — plaintext never leaves the user's device.
+**ShoreStack Vault** is a SaaS web application in the **Shorestack** family of apps (sister product to Shorestack Books). It replaces 1Password and similar password managers with a zero-knowledge encrypted vault where users store passwords, secure notes, credit cards, identities, and important documents. The server (Supabase) only ever stores AES-256 encrypted ciphertext — plaintext never leaves the user's device.
 
+**Brand:** Shorestack — Swiss-inspired, modernist, 1970s optical-art aesthetic
 **Target:** General consumers and small businesses moving away from expensive password manager subscriptions.
-**Monetization:** Freemium SaaS — Free / Pro ($3/mo) / Team ($6/user/mo) via Stripe.
+**Monetization:** Paid SaaS (no free tier) — Individual ($3.99/mo) / Team ($6.99/mo) / Custom (contact sales) via Stripe.
 **Owner/Developer:** Brandon Day — Days Management LLC, Austin TX
+**Live URL:** https://password-mu.vercel.app
+**GitHub:** https://github.com/Brandondaymdr/password
+**Supabase Project:** qdhwgzftpycdmovyniec
+
+---
+
+## Brand Guidelines
+
+| Property | Value |
+|---|---|
+| Primary Color (Deep Ocean) | `#1b4965` — text, borders, navigation, wordmark |
+| Accent Color (Seafoam) | `#5fa8a0` — active tabs, primary CTAs, pill toggles |
+| Background (Sand) | `#fcfbf8` — page backgrounds, off-white surfaces |
+| Success | `#16a34a` |
+| Danger/Coral | `#e76f51` — alerts only |
+| Warning | `#d97706` |
+| Primary Font | Inter — all headings and body text |
+| Monospace Font | JetBrains Mono — numbers, passwords, financial data |
+| Border Radius | 0–2px (sharp corners, mathematical precision) |
+| Card Shadows | None (flat, border only) |
+| Borders | 1px solid Deep Ocean at 10–20% opacity |
+| Primary Buttons | Solid Seafoam fill, sharp corners |
+| Secondary Buttons | Deep Ocean outline, no fill |
+| Logo | Wave grid mark (sinusoidal, 11 lines) + "shorestack" wordmark |
+| Sub-brand | "shorestack vault" — wave mark color matches Seafoam accent |
 
 ---
 
@@ -17,9 +43,9 @@
 
 | Layer | Technology |
 |---|---|
-| Framework | Next.js 14 (App Router) |
+| Framework | Next.js 16 (App Router) |
 | Hosting | Vercel |
-| Auth | Supabase Auth (email, Google OAuth, magic link, MFA) |
+| Auth | Supabase Auth (email, magic link) |
 | Database | Supabase PostgreSQL |
 | File Storage | Supabase Storage (encrypted blobs) |
 | Encryption | Web Crypto API (AES-256-GCM, PBKDF2) — native browser, no library |
@@ -59,10 +85,10 @@ AES-256-GCM encrypt each vault item → store encrypted blob + IV in Supabase
 ```sql
 CREATE TABLE profiles (
   id              UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
-  kdf_salt        TEXT NOT NULL,         -- unique per user, generated on signup
+  kdf_salt        TEXT NOT NULL,
   kdf_iterations  INT DEFAULT 600000,
-  hint            TEXT,                  -- optional master password hint
-  plan            TEXT DEFAULT 'free',   -- 'free' | 'pro' | 'team'
+  hint            TEXT,
+  plan            TEXT DEFAULT 'individual' CHECK (plan IN ('individual', 'team', 'custom')),
   stripe_customer_id TEXT,
   created_at      TIMESTAMPTZ DEFAULT NOW()
 );
@@ -76,7 +102,7 @@ CREATE TABLE vault_items (
   item_type        TEXT NOT NULL,         -- 'login' | 'secure_note' | 'credit_card' | 'identity'
   encrypted_data   TEXT NOT NULL,         -- AES-256-GCM JSON blob
   iv               TEXT NOT NULL,         -- base64 initialization vector
-  search_index     TEXT,                  -- HMAC-SHA256 of item name (searchable without exposing name)
+  search_index     TEXT,                  -- HMAC-SHA256 of item name
   favorite         BOOLEAN DEFAULT FALSE,
   created_at       TIMESTAMPTZ DEFAULT NOW(),
   updated_at       TIMESTAMPTZ DEFAULT NOW()
@@ -89,9 +115,9 @@ CREATE TABLE vault_documents (
   id                   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id              UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   linked_item_id       UUID REFERENCES vault_items(id) ON DELETE SET NULL,
-  storage_path         TEXT NOT NULL,      -- Supabase Storage encrypted file path
-  file_name_encrypted  TEXT NOT NULL,      -- AES encrypted original filename
-  file_key_encrypted   TEXT NOT NULL,      -- per-file AES key, encrypted with vault key
+  storage_path         TEXT NOT NULL,
+  file_name_encrypted  TEXT NOT NULL,
+  file_key_encrypted   TEXT NOT NULL,
   file_iv              TEXT NOT NULL,
   file_size            INT,
   created_at           TIMESTAMPTZ DEFAULT NOW()
@@ -103,7 +129,7 @@ CREATE TABLE vault_documents (
 CREATE TABLE vault_audit_log (
   id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id     UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-  action      TEXT NOT NULL,   -- 'unlock' | 'view' | 'create' | 'edit' | 'delete' | 'export'
+  action      TEXT NOT NULL,
   item_id     UUID,
   ip_address  TEXT,
   user_agent  TEXT,
@@ -111,162 +137,116 @@ CREATE TABLE vault_audit_log (
 );
 ```
 
-### Row-Level Security (apply to ALL tables)
-```sql
-ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
-ALTER TABLE vault_items ENABLE ROW LEVEL SECURITY;
-ALTER TABLE vault_documents ENABLE ROW LEVEL SECURITY;
-ALTER TABLE vault_audit_log ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "owner_only" ON profiles USING (auth.uid() = id);
-CREATE POLICY "owner_only" ON vault_items USING (auth.uid() = user_id);
-CREATE POLICY "owner_only" ON vault_documents USING (auth.uid() = user_id);
-CREATE POLICY "owner_only" ON vault_audit_log USING (auth.uid() = user_id);
-```
+### Row-Level Security
+All tables have RLS enabled with owner-only policies.
 
 ---
 
 ## Project File Structure
 
 ```
-vaultstack/
+shorestack-vault/
 ├── app/
 │   ├── (auth)/
 │   │   ├── login/page.tsx
 │   │   ├── signup/page.tsx
-│   │   └── setup/page.tsx          ← master password setup flow
+│   │   └── setup/page.tsx              ← master password setup flow
 │   ├── (vault)/
 │   │   ├── dashboard/page.tsx
-│   │   ├── logins/page.tsx
 │   │   ├── documents/page.tsx
-│   │   ├── notes/page.tsx
 │   │   └── settings/page.tsx
 │   ├── api/
-│   │   ├── stripe/webhook/route.ts
+│   │   ├── stripe/
+│   │   │   ├── checkout/route.ts       ← creates Stripe Checkout sessions
+│   │   │   ├── webhook/route.ts        ← handles subscription lifecycle events
+│   │   │   └── portal/route.ts         ← Stripe Customer Portal redirect
 │   │   └── audit/route.ts
-│   └── layout.tsx
+│   ├── auth/callback/route.ts          ← Supabase email confirmation handler
+│   ├── layout.tsx
+│   └── globals.css
 ├── components/
 │   ├── vault/
-│   │   ├── VaultItem.tsx
 │   │   ├── AddItemModal.tsx
+│   │   ├── VaultItemDetail.tsx
 │   │   ├── PasswordGenerator.tsx
-│   │   └── DocumentUpload.tsx
-│   └── ui/                         ← shared Tailwind components
+│   │   ├── DocumentUpload.tsx
+│   │   └── PricingCards.tsx
+│   └── ui/
 ├── lib/
-│   ├── crypto.ts                   ← ALL encryption logic lives here
-│   ├── supabase.ts                 ← Supabase client
-│   ├── stripe.ts                   ← Stripe helpers
-│   └── vault-session.ts            ← in-memory vault key session manager
+│   ├── crypto.ts                       ← ALL encryption logic (AES-256-GCM, PBKDF2, HMAC)
+│   ├── supabase.ts                     ← Browser Supabase client
+│   ├── supabase-server.ts              ← Server + Admin Supabase clients
+│   ├── stripe.ts                       ← Lazy-init Stripe client, price IDs, plan mapper
+│   ├── plan-enforcement.ts             ← Plan limit checks (items, storage, audit)
+│   └── vault-session.ts               ← In-memory vault key with 15min auto-lock
 ├── types/
-│   └── vault.ts                    ← TypeScript types for all vault entities
-└── CLAUDE.md                       ← this file
+│   └── vault.ts                        ← TypeScript types, PlanType, PLAN_LIMITS
+├── middleware.ts                       ← Auth route protection
+├── .env.local                          ← Environment variables (gitignored)
+├── .env.example
+└── CLAUDE.md                           ← this file
 ```
 
 ---
 
-## Encryption Module (`lib/crypto.ts`) — Key Functions to Build
+## Pricing & Plans
 
-```typescript
-// Derive vault key from master password (never stored)
-deriveVaultKey(masterPassword: string, salt: string): Promise<CryptoKey>
+| Plan | Price | Users | Items | Storage | Audit | Shared Vaults |
+|---|---|---|---|---|---|---|
+| Individual | $3.99/mo | 1 | Unlimited | 5 GB | Yes | No |
+| Team | $6.99/mo | 5 | Unlimited | 10 GB | Yes | Yes |
+| Custom | Contact | Unlimited | Unlimited | Unlimited | Yes | Yes |
 
-// Encrypt a vault item
-encryptItem(data: object, vaultKey: CryptoKey): Promise<{ encrypted: string, iv: string }>
+There is **no free tier**. All new signups default to the Individual plan.
 
-// Decrypt a vault item
-decryptItem(encrypted: string, iv: string, vaultKey: CryptoKey): Promise<object>
-
-// Generate HMAC search index for item name
-generateSearchIndex(name: string, vaultKey: CryptoKey): Promise<string>
-
-// Generate a strong random password
-generatePassword(length: number, options: PasswordOptions): string
-
-// Encrypt a file for document storage
-encryptFile(file: File, vaultKey: CryptoKey): Promise<{ encryptedBuffer: ArrayBuffer, fileKey: string, iv: string }>
-```
-
----
-
-## Vault Session Management
-
-The vault key must be held in memory for the current session (locked after timeout or tab close). Use a module-level variable in `lib/vault-session.ts`:
-
-```typescript
-// Store vault key in memory only — cleared on lock/logout
-let _vaultKey: CryptoKey | null = null;
-const SESSION_TIMEOUT_MS = 15 * 60 * 1000; // 15 minutes inactivity lock
-
-export const VaultSession = {
-  set: (key: CryptoKey) => { _vaultKey = key },
-  get: () => _vaultKey,
-  lock: () => { _vaultKey = null },
-  isUnlocked: () => _vaultKey !== null
-}
-```
-
----
-
-## User Flows
-
-### 1. New User Signup
-1. Create account (email + password for Supabase Auth — this is NOT the vault master password)
-2. Prompted to create a **Master Password** (separate from account password)
-3. App generates `kdf_salt`, runs PBKDF2 → derives Vault Key in browser
-4. `kdf_salt` and `kdf_iterations` saved to `profiles` table
-5. Vault Key held in session memory — user is now "unlocked"
-
-### 2. Returning User Login
-1. Login with email/password (Supabase Auth)
-2. Prompted for Master Password
-3. App fetches `kdf_salt` from `profiles`, re-derives Vault Key
-4. Vault unlocked — items fetched and decrypted client-side
-
-### 3. Auto-Lock
-- Vault locks after 15 minutes of inactivity (configurable in settings)
-- On lock: `VaultSession.lock()` called, vault key cleared from memory
-- User must re-enter Master Password to unlock
-
----
-
-## Build Order (follow this sequence)
-
-1. **[PHASE 1]** Supabase setup — run schema SQL, enable RLS, configure Auth
-2. **[PHASE 2]** Next.js project scaffold — auth pages, layout, Supabase client
-3. **[PHASE 3]** `lib/crypto.ts` — full encryption module with tests
-4. **[PHASE 4]** Master password setup + login flow
-5. **[PHASE 5]** Vault dashboard — list, add, edit, delete logins
-6. **[PHASE 6]** Password generator component
-7. **[PHASE 7]** Document upload + encrypted storage
-8. **[PHASE 8]** Secure notes, credit cards, identities
-9. **[PHASE 9]** Search (HMAC index)
-10. **[PHASE 10]** Audit log viewer (Pro feature)
-11. **[PHASE 11]** Stripe subscription + plan enforcement
-12. **[PHASE 12]** Settings — change master password, export vault, delete account
+### Stripe Integration
+- **Checkout:** `/api/stripe/checkout` creates Checkout sessions, auto-creates Stripe customer
+- **Webhook:** `/api/stripe/webhook` handles `checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.payment_failed`
+- **Portal:** `/api/stripe/portal` redirects to Stripe Customer Portal for self-serve billing
+- **Plan sync:** Webhook updates `profiles.plan` in Supabase via admin client (bypasses RLS)
 
 ---
 
 ## Environment Variables (`.env.local`)
 
 ```env
+# Supabase
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
-SUPABASE_SERVICE_ROLE_KEY=        # server-side only
+SUPABASE_SERVICE_ROLE_KEY=
+
+# Stripe
 STRIPE_SECRET_KEY=
 STRIPE_WEBHOOK_SECRET=
 NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=
-NEXT_PUBLIC_APP_URL=https://vaultstack.app
+STRIPE_INDIVIDUAL_MONTHLY_PRICE_ID=
+STRIPE_INDIVIDUAL_YEARLY_PRICE_ID=
+STRIPE_TEAM_MONTHLY_PRICE_ID=
+STRIPE_TEAM_YEARLY_PRICE_ID=
+
+# App
+NEXT_PUBLIC_APP_URL=https://password-mu.vercel.app
 ```
 
 ---
 
-## Plan Enforcement
+## Build Progress
 
-Check `profiles.plan` on the server before:
-- Uploading documents (Free: 100MB limit, Pro: 5GB)
-- Creating vault items (Free: 50 items, Pro: unlimited)
-- Accessing audit log (Pro only)
-- Creating shared vaults (Team only)
+- [x] Phase 1: Supabase setup (schema, RLS, triggers, storage bucket)
+- [x] Phase 2: Next.js scaffold (auth pages, layout, Supabase client)
+- [x] Phase 3: Encryption module (`lib/crypto.ts`)
+- [x] Phase 4: Master password setup + login flow
+- [x] Phase 5: Vault dashboard (list, add, edit, delete, search, favorites)
+- [x] Phase 6: Password generator component
+- [x] Phase 7: Document upload + encrypted storage
+- [x] Phase 8: Secure notes, credit cards, identities
+- [x] Phase 9: Search (HMAC index)
+- [x] Phase 10: Audit log viewer
+- [x] Phase 11: Stripe subscription + plan enforcement
+- [x] Phase 12: Settings (change master password, export vault, delete account)
+- [ ] Phase 13: Shorestack branding + landing page
+- [ ] Phase 14: Browser extension (v2)
+- [ ] Phase 15: PWA + biometric unlock (v2)
 
 ---
 
@@ -277,18 +257,7 @@ Check `profiles.plan` on the server before:
 - **Fail locked** — any error should lock the vault, not expose data
 - **Audit everything** — every item view/create/edit/delete logged
 - **Mobile-first UI** — most users will use this on their phone
-
----
-
-## Future Features (v2)
-
-- Browser extension (Chrome/Firefox) for autofill
-- iOS/Android PWA with biometric unlock
-- Emergency access (trusted contact can request access after delay)
-- Shared vaults (Team plan)
-- CSV import from 1Password, LastPass, Bitwarden
-- TOTP/2FA code generator built-in
-- Google Drive sync option for document backups (personal/power user tier)
+- **Shorestack brand consistency** — match the Swiss-modernist aesthetic across all products
 
 ---
 
@@ -299,3 +268,4 @@ Check `profiles.plan` on the server before:
 - The vault key (`CryptoKey`) should only exist in `VaultSession` — never in React state, localStorage, or cookies
 - Supabase RLS handles multi-tenancy — always confirm policies are active before storing data
 - TypeScript strict mode is on — no `any` types in crypto or vault modules
+- Follow Shorestack brand guidelines: Deep Ocean (#1b4965), Seafoam (#5fa8a0), Sand (#fcfbf8), Inter font, sharp corners, no shadows
