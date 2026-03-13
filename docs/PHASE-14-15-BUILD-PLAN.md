@@ -517,21 +517,23 @@ npm install -D tailwindcss @tailwindcss/vite
 
 ## Build Order
 
-### Phase 14 (Extension) — Estimated 6 sub-phases
-1. **14A** — Scaffold extension project, Vite config, manifest, Tailwind
-2. **14B** — Service worker with Supabase auth + vault session
-3. **14C** — Popup UI (Unlock → VaultList → ItemDetail → Generator)
-4. **14D** — Content script form detection + autofill
-5. **14E** — Save new credentials on form submit
-6. **14F** — Test on real sites, build for Chrome + Firefox
+### Phase 14 (Extension) — COMPLETE
+1. **14A** ✅ — Scaffold extension project, Vite config, manifest, Tailwind
+2. **14B** ✅ — Service worker with Supabase auth + vault session
+3. **14C** ✅ — Popup UI (Login → Unlock → VaultList → ItemDetail → Generator)
+4. **14D** ✅ — Content script form detection + autofill
+5. **14E** ✅ — Save new credentials on form submit
+6. **14F** ✅ — End-to-end tested: web app ↔ extension vault sync confirmed
 
-### Phase 15 (PWA + Biometric) — Estimated 6 sub-phases
-1. **15A** — PWA manifest, service worker, install prompt, icons
-2. **15B** — IndexedDB vault cache + offline read access
-3. **15C** — WebAuthn enrollment (DB migration + lib/webauthn.ts + Settings UI)
-4. **15D** — Biometric unlock flow (lib/biometric-key.ts + Dashboard unlock button)
-5. **15E** — Online/offline sync (lib/vault-sync.ts)
-6. **15F** — iOS Safari testing + adjustments
+### Phase 15 (PWA + Biometric) — COMPLETE
+1. **15A** ✅ — PWA manifest, vanilla service worker, install prompt, icons
+2. **15B** ✅ — IndexedDB vault cache + offline read access
+3. **15C** ✅ — WebAuthn enrollment (DB migration applied + lib/webauthn.ts + Settings UI)
+4. **15D** ✅ — Biometric unlock flow (lib/biometric-key.ts + Dashboard unlock button)
+5. **15E** ✅ — Online/offline sync (lib/vault-sync.ts)
+6. **15F** ✅ — Build verification, iOS Safari adjustments, viewport fix
+
+**Note:** Used vanilla service worker (`public/sw.js`) instead of @serwist/next for simpler deployment. The build plan originally specified Serwist, but the vanilla approach is lighter and avoids next.config.ts modifications.
 
 ---
 

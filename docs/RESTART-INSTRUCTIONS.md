@@ -1,52 +1,66 @@
 # ShoreStack Vault — Restart Instructions
 
-## For the next Claude session: Phase 14 + 15 Build
+## For the next Claude session
 
 ### Context
 Read these files first to understand the project:
-1. `CLAUDE.md` — Full project overview, tech stack, database schema, brand guidelines
-2. `docs/PHASE-14-15-BUILD-PLAN.md` — Detailed build plan for browser extension + PWA + biometric
+1. `CLAUDE.md` — Full project overview, tech stack, database schema, brand guidelines, Phase 14+15 architecture
+2. `docs/PHASE-14-15-BUILD-PLAN.md` — Detailed build plan for browser extension + PWA + biometric (reference)
 
 ### What's been done
-- Phases 1–13 are complete and deployed at https://password-mu.vercel.app
-- The build plan for Phases 14–15 has been researched and documented
-- CLAUDE.md has been updated with extension and PWA architecture sections
+- **Phases 1–15 are complete** and deployed at https://password-mu.vercel.app
+- Phase 14: Chrome MV3 browser extension (Vite + CRXJS + React 19 + Tailwind v4)
+- Phase 15: PWA manifest, service worker, IndexedDB cache, WebAuthn biometric enrollment/unlock, offline sync
+- All code pushed to GitHub (`main` branch)
+- Supabase DB migration for WebAuthn columns has been applied
 
-### What to build next
+### Key architecture to know
 
-**Start with Phase 14A: Extension Scaffold**
-1. Create `extension/` directory with Vite + React + TypeScript + Tailwind
-2. Add CRXJS plugin for Manifest V3 development
-3. Set up `manifest.json` with correct permissions
-4. Copy `lib/crypto.ts` → `extension/src/shared/crypto.ts`
-5. Copy relevant types from `types/vault.ts` → `extension/src/shared/types.ts`
-6. Verify the extension loads in Chrome (`chrome://extensions` → Load unpacked)
+**Extension** (`extension/` directory — separate Vite project):
+- Independent vault session in service worker memory
+- 13 message types for popup ↔ service worker ↔ content script communication
+- Content scripts detect login forms via password input scanning + MutationObserver
+- Autofill uses native `HTMLInputElement.prototype.value` setter for framework compatibility
+- Build: `cd extension && npm install && npm run build` → load `dist/` unpacked in Chrome
 
-**Then Phase 14B: Service Worker & Auth**
-7. Build service worker with Supabase auth (email + password login)
-8. Implement vault session in service worker memory (same 15min auto-lock pattern)
-9. Set up message passing protocol between popup ↔ service worker ↔ content scripts
+**PWA + Biometric** (in web app root):
+- `public/sw.js` — Vanilla service worker with three caching strategies
+- `lib/vault-cache.ts` — IndexedDB stores encrypted ciphertext only
+- `lib/vault-sync.ts` — Online/offline sync with unsynced item tracking
+- `lib/webauthn.ts` — Platform authenticator registration/authentication
+- `lib/biometric-key.ts` — Vault key wrapping with AES-256-GCM
+- BiometricEnroll wired into Settings page, BiometricUnlock wired into Dashboard lock screen
+- PWAInstallPrompt on Dashboard (Chrome/Android + iOS instructions)
+- Note: Biometric unlock currently still requires master password (true passwordless needs WebAuthn PRF extension)
 
-**Then continue through 14C → 14F, then 15A → 15F** (see build plan for details)
+### What to build next (potential Phase 16+)
+- **Shared vaults** — Team/family vault sharing (Plus plan feature)
+- **Import from other managers** — 1Password, LastPass, Bitwarden CSV import
+- **WebAuthn PRF extension** — True passwordless biometric unlock
+- **Firefox extension** — Adapt MV3 extension for Firefox (web-ext)
+- **Chrome Web Store / Firefox Add-ons publishing** — Privacy policy, store listings
+- **Emergency access** — Trusted contact can request vault access after waiting period
+- **TOTP / 2FA codes** — Store and auto-fill authenticator codes
 
 ### Key files to read before coding
-- `lib/crypto.ts` — All encryption logic (copy this for extension)
-- `lib/vault-session.ts` — In-memory vault key management (replicate pattern for extension)
-- `lib/supabase.ts` — Browser Supabase client (adapt for extension)
-- `types/vault.ts` — All TypeScript types
-- `app/(vault)/dashboard/page.tsx` — Vault unlock + item display logic
-- `components/vault/PasswordGenerator.tsx` — Reuse in extension popup
+- `CLAUDE.md` — Complete project docs including all architecture
+- `lib/crypto.ts` — All encryption logic
+- `lib/vault-session.ts` — In-memory vault key management
+- `types/vault.ts` — All TypeScript types including WebAuthn fields
+- `app/(vault)/dashboard/page.tsx` — Vault unlock + item display + biometric + PWA prompt
+- `app/(vault)/settings/page.tsx` — Settings + biometric enrollment
 
 ### Environment
 - **Framework:** Next.js 16 (App Router) + Turbopack
-- **Node:** Check with `node -v` (project uses Node 20+)
+- **Node:** 20+
 - **Package manager:** npm
 - **Build:** `npm run build` from project root
 - **Dev:** `npm run dev` for web app, `cd extension && npm run dev` for extension
+- **TypeScript:** Root `tsconfig.json` excludes `extension/` (has its own tsconfig)
 
 ### Database
 - **Supabase project:** qdhwgzftpycdmovyniec
-- **Phase 15C requires SQL migration** — add WebAuthn columns to profiles table (SQL in build plan)
+- All migrations applied (including Phase 15C WebAuthn columns)
 
 ### Security rules (never break these)
 - Vault key never stored in storage, localStorage, IndexedDB, or cookies
@@ -55,3 +69,6 @@ Read these files first to understand the project:
 - Autofill only on explicit user action
 - Master password never stored anywhere
 - Content scripts run in isolated world
+
+### Patch workflow
+Generate patch in cloud session → save to `~/Desktop/Storage/Claude/password/` → user applies with `git apply <path>` from repo dir → commit and push

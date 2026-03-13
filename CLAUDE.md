@@ -53,6 +53,8 @@
 | Styling | Tailwind CSS |
 | Payments | Stripe (subscriptions) |
 | Language | TypeScript |
+| Extension | Vite 6 + CRXJS (beta.28) + React 19 + Tailwind v4, Manifest V3 |
+| PWA | Vanilla service worker, IndexedDB, WebAuthn |
 
 ---
 
@@ -77,6 +79,8 @@ AES-256-GCM encrypt each vault item → store encrypted blob + IV in Supabase
 - The master password is never stored anywhere
 - Each vault item has its own unique IV
 - File attachments are encrypted client-side before upload to Supabase Storage
+- IndexedDB may only store encrypted ciphertext — never plaintext vault data
+- WebAuthn enrollment must use `userVerification: 'required'`
 
 ---
 
@@ -93,6 +97,12 @@ CREATE TABLE profiles (
   vault_verifier_iv  TEXT,
   plan            TEXT DEFAULT 'personal' CHECK (plan IN ('personal', 'plus')),
   stripe_customer_id TEXT,
+  -- WebAuthn / Biometric (Phase 15)
+  webauthn_credential_id         TEXT,
+  webauthn_public_key            TEXT,
+  webauthn_transports            TEXT[],
+  biometric_vault_key_encrypted  TEXT,
+  biometric_vault_key_iv         TEXT,
   created_at      TIMESTAMPTZ DEFAULT NOW()
 );
 ```
@@ -132,7 +142,7 @@ CREATE TABLE vault_documents (
 CREATE TABLE vault_audit_log (
   id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id     UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-  action      TEXT NOT NULL,
+  action      TEXT NOT NULL,   -- 'unlock' | 'create' | 'edit' | 'delete' | 'export' | 'biometric_enrolled' | 'biometric_removed'
   item_id     UUID,
   ip_address  TEXT,
   user_agent  TEXT,
@@ -155,9 +165,9 @@ shorestack-vault/
 │   │   ├── signup/page.tsx
 │   │   └── setup/page.tsx              ← master password setup flow
 │   ├── (vault)/
-│   │   ├── dashboard/page.tsx
+│   │   ├── dashboard/page.tsx          ← vault list + BiometricUnlock + PWAInstallPrompt
 │   │   ├── documents/page.tsx
-│   │   └── settings/page.tsx
+│   │   └── settings/page.tsx           ← BiometricEnroll wired in
 │   ├── api/
 │   │   ├── stripe/
 │   │   │   ├── checkout/route.ts       ← creates Stripe Checkout sessions
@@ -165,45 +175,79 @@ shorestack-vault/
 │   │   │   └── portal/route.ts         ← Stripe Customer Portal redirect
 │   │   └── audit/route.ts
 │   ├── auth/callback/route.ts          ← Supabase email confirmation handler
-│   ├── page.tsx                          ← Landing page (hero, features, pricing, footer)
-│   ├── layout.tsx                        ← Root layout (Inter + JetBrains Mono, Sand bg)
-│   └── globals.css                       ← Brand theme (CSS vars, utility classes)
+│   ├── manifest.ts                     ← PWA web manifest (generates /manifest.webmanifest)
+│   ├── page.tsx                        ← Landing page (hero, features, pricing, footer)
+│   ├── layout.tsx                      ← Root layout (Inter + JetBrains Mono, Sand bg, PWA meta)
+│   └── globals.css                     ← Brand theme (CSS vars, utility classes)
 ├── components/
 │   ├── ui/
-│   │   └── ShorestackLogo.tsx            ← SVG wave mark + wordmark (horizontal/stacked/mark)
-│   └── vault/
-│       ├── AddItemModal.tsx
-│       ├── VaultItemDetail.tsx
-│       ├── PasswordGenerator.tsx
-│       ├── DocumentUpload.tsx
-│       └── PricingCards.tsx
+│   │   └── ShorestackLogo.tsx          ← SVG wave mark + wordmark (horizontal/stacked/mark)
+│   ├── vault/
+│   │   ├── AddItemModal.tsx
+│   │   ├── VaultItemDetail.tsx
+│   │   ├── PasswordGenerator.tsx
+│   │   ├── DocumentUpload.tsx
+│   │   ├── PricingCards.tsx
+│   │   ├── BiometricEnroll.tsx         ← Settings: enroll Touch ID / Face ID / Windows Hello
+│   │   ├── BiometricUnlock.tsx         ← Dashboard lock screen: biometric unlock button
+│   │   └── PWAInstallPrompt.tsx        ← Install banner (Chrome/Android + iOS instructions)
+│   └── PWARegister.tsx                 ← Registers service worker + requests persistent storage
 ├── lib/
 │   ├── crypto.ts                       ← ALL encryption logic (AES-256-GCM, PBKDF2, HMAC)
 │   ├── supabase.ts                     ← Browser Supabase client
 │   ├── supabase-server.ts              ← Server + Admin Supabase clients
 │   ├── stripe.ts                       ← Lazy-init Stripe client, price IDs, plan mapper
 │   ├── plan-enforcement.ts             ← Plan limit checks (items, storage, audit)
-│   └── vault-session.ts               ← In-memory vault key with 15min auto-lock
+│   ├── vault-session.ts                ← In-memory vault key with 15min auto-lock
+│   ├── vault-cache.ts                  ← IndexedDB encrypted vault cache (offline support)
+│   ├── vault-sync.ts                   ← Online/offline sync between Supabase and IndexedDB
+│   ├── webauthn.ts                     ← WebAuthn registration + authentication helpers
+│   └── biometric-key.ts               ← Vault key wrapping/unwrapping for biometric unlock
+├── public/
+│   ├── sw.js                           ← Service worker (cache-first/network-first/stale-while-revalidate)
+│   ├── icon-180.png                    ← Apple touch icon
+│   ├── icon-192.png                    ← Android PWA icon
+│   ├── icon-192-maskable.png           ← Android maskable icon
+│   ├── icon-512.png                    ← Splash screen icon
+│   └── icon-512-maskable.png           ← Splash screen maskable icon
 ├── types/
-│   └── vault.ts                        ← TypeScript types, PlanType, PLAN_LIMITS
-├── middleware.ts                       ← Auth route protection
-├── .env.local                          ← Environment variables (gitignored)
+│   └── vault.ts                        ← TypeScript types, PlanType, PLAN_LIMITS, WebAuthn fields
+├── middleware.ts                        ← Auth route protection
+├── tsconfig.json                        ← Excludes extension/ directory
+├── .env.local                           ← Environment variables (gitignored)
 ├── .env.example
+├── .gitignore                           ← Includes extension/dist/, extension/node_modules/
 ├── docs/
-│   └── PHASE-14-15-BUILD-PLAN.md      ← Extension + PWA architecture & build plan
-├── CLAUDE.md                           ← this file
-└── extension/                          ← (Phase 14) Browser extension — separate Vite project
+│   ├── PHASE-14-15-BUILD-PLAN.md       ← Extension + PWA architecture & build plan
+│   └── RESTART-INSTRUCTIONS.md         ← Quick-start guide for new Claude sessions
+├── CLAUDE.md                            ← This file
+├── README.md
+└── extension/                           ← Chrome MV3 browser extension (separate Vite project)
     ├── src/
-    │   ├── background/service-worker.ts
-    │   ├── content/content-script.ts
-    │   ├── content/form-detector.ts
-    │   ├── content/autofill.ts
-    │   ├── popup/App.tsx
-    │   ├── popup/pages/
-    │   └── shared/crypto.ts            ← Copy of lib/crypto.ts for extension bundle
-    ├── public/manifest.json            ← Manifest V3
-    ├── vite.config.ts
-    └── package.json
+    │   ├── background/service-worker.ts ← Message router, vault session, Supabase auth
+    │   ├── content/
+    │   │   ├── content-script.ts        ← Page injection, form submit listener, autofill handler
+    │   │   ├── form-detector.ts         ← Login form detection via password input scanning
+    │   │   └── autofill.ts              ← Native value setter for React/Vue/Angular compatibility
+    │   ├── popup/
+    │   │   ├── App.tsx                  ← Root popup with screen routing
+    │   │   └── pages/
+    │   │       ├── Login.tsx            ← Email + password Supabase login
+    │   │       ├── Unlock.tsx           ← Master password entry
+    │   │       ├── VaultList.tsx        ← Search + item list, URL-matched sorting
+    │   │       ├── ItemDetail.tsx       ← View/copy credentials, autofill button
+    │   │       └── Generator.tsx        ← Password generator with strength meter
+    │   ├── shared/
+    │   │   ├── crypto.ts               ← Copy of lib/crypto.ts for extension bundle
+    │   │   ├── vault-session.ts         ← In-memory CryptoKey with 15-min auto-lock
+    │   │   ├── supabase-client.ts       ← Supabase client using chrome.storage.session
+    │   │   └── types.ts                ← Extension-specific types + ExtensionMessageType
+    │   ├── styles/globals.css           ← Tailwind v4 + Shorestack brand theme
+    │   └── vite-env.d.ts               ← import.meta.env type reference
+    ├── public/manifest.json             ← Manifest V3
+    ├── vite.config.ts                   ← Vite + React + Tailwind + CRXJS
+    ├── tsconfig.json                    ← Strict, ES2022, chrome types
+    └── package.json                     ← React 19, Supabase JS, CRXJS beta.28
 ```
 
 ---
@@ -246,6 +290,13 @@ STRIPE_PLUS_YEARLY_PRICE_ID=
 NEXT_PUBLIC_APP_URL=https://password-mu.vercel.app
 ```
 
+### Extension Environment (`.env` in `extension/`)
+
+```env
+VITE_SUPABASE_URL=https://qdhwgzftpycdmovyniec.supabase.co
+VITE_SUPABASE_ANON_KEY=<anon key>
+```
+
 ---
 
 ## Build Progress
@@ -263,10 +314,14 @@ NEXT_PUBLIC_APP_URL=https://password-mu.vercel.app
 - [x] Phase 11: Stripe subscription + plan enforcement
 - [x] Phase 12: Settings (change master password, export vault, delete account)
 - [x] Phase 13: Shorestack branding + landing page
-- [ ] Phase 14: Browser extension (Chrome + Firefox, Manifest V3)
-- [ ] Phase 15: PWA + biometric unlock (WebAuthn, IndexedDB offline cache)
+- [x] Phase 14: Browser extension (Chrome MV3, Manifest V3)
+- [x] Phase 15: PWA + biometric unlock (WebAuthn, IndexedDB offline cache)
 
-> **Build plan:** See `docs/PHASE-14-15-BUILD-PLAN.md` for full architecture, file lists, and build order.
+**GitHub commits (main branch):**
+- `5fc72ba` — Pre-Phase 14 cleanup (assessment fixes)
+- `ff223c0` — Phase 14: Browser extension (30 files)
+- `e7a956c` — URL validation fix (type="url" → type="text" + auto-prepend https://)
+- `16b5e74` — Phase 15: PWA + Biometric Unlock (20 files)
 
 ---
 
@@ -283,8 +338,9 @@ NEXT_PUBLIC_APP_URL=https://password-mu.vercel.app
 
 ## Phase 14: Browser Extension Architecture
 
-**Stack:** Vite + React 19 + Tailwind + CRXJS, Manifest V3 (Chrome + Firefox)
+**Stack:** Vite 6 + CRXJS (beta.28) + React 19 + Tailwind v4, Manifest V3
 **Location:** `extension/` directory (separate project with its own `package.json`)
+**Status:** Complete and tested end-to-end
 
 **Key architecture decisions:**
 - Extension has its own vault session in service worker memory (independent from web app)
@@ -294,36 +350,80 @@ NEXT_PUBLIC_APP_URL=https://password-mu.vercel.app
 - Autofill requires explicit user click in popup (never automatic)
 - MV3 service workers can terminate; vault key is lost → user re-enters master password
 - Supabase session token stored in `chrome.storage.session` (cleared on browser close)
+- URL inputs accept bare domains (auto-prepend `https://` on save)
 
-**Extension message protocol:**
-- `FORM_DETECTED` — Content script → Service worker (login form found on page)
-- `GET_CREDENTIALS` — Popup → Service worker (request matching items for current URL)
-- `AUTOFILL` — Popup → Content script (fill form with decrypted credentials)
-- `SAVE_OFFER` — Content script → Service worker (form submitted, offer to save)
-- `UNLOCK` / `LOCK` / `GET_STATUS` — Popup ↔ Service worker (session management)
+**Extension message protocol (13 types):**
+- `LOGIN` / `LOGOUT` — Supabase authentication
+- `UNLOCK` / `LOCK` / `GET_STATUS` — Vault session management
+- `GET_CREDENTIALS` — Fetch items matching current tab URL (hostname match)
+- `SEARCH_VAULT` — Full vault search with decryption
+- `AUTOFILL` — Fill form via content script
+- `CAPTURE_CREDENTIALS` — Grab form values for saving
+- `FORM_DETECTED` — Content script notifies service worker of login forms
+- `SAVE_OFFER` / `SAVE_CREDENTIAL` — Save captured credentials to vault
+- `GENERATE_PASSWORD` — Password generation in service worker
+
+**Building the extension:**
+```bash
+cd extension
+npm install
+cp .env.example .env  # Add Supabase URL + anon key
+npm run build         # Output in extension/dist/
+```
+Load unpacked from `extension/dist/` in `chrome://extensions` (Developer mode on).
 
 ---
 
 ## Phase 15: PWA + Biometric Architecture
 
-**PWA Stack:** @serwist/next (service worker), IndexedDB (offline cache)
+**PWA Stack:** Vanilla service worker (`public/sw.js`), IndexedDB (`lib/vault-cache.ts`)
 **Biometric Stack:** WebAuthn API (platform authenticators: Touch ID, Face ID, Windows Hello)
+**Status:** Complete — DB migration applied, components wired into Settings + Dashboard
 
-**Key architecture decisions:**
-- PWA manifest via Next.js `app/manifest.ts` (generates `/manifest.webmanifest`)
-- Service worker caching: cache-first for assets, network-first for API calls
-- IndexedDB stores encrypted ciphertext only (same blobs as Supabase, never plaintext)
-- Biometric unlock uses WebAuthn with `authenticatorAttachment: 'platform'`
-- Vault key wrapping: on enrollment, re-derive vault key as extractable, encrypt raw bytes with a random wrap key, encrypt wrap key with vault key, store both encrypted blobs in `profiles`
-- On biometric unlock: WebAuthn verifies user → decrypt wrap key → decrypt vault key → import as non-extractable CryptoKey
-- Master password always available as fallback
+**Service worker caching strategies (`public/sw.js`):**
+- **Supabase API calls:** Network-first with cache fallback
+- **Static assets (images, fonts, CSS):** Cache-first
+- **App pages and JS:** Stale-while-revalidate
+- Pre-caches app shell on install. Skips non-GET requests.
 
-**New database columns (profiles table):**
-- `webauthn_credential_id TEXT` — Base64 credential ID
-- `webauthn_public_key TEXT` — JSON-encoded public key (JWK)
-- `webauthn_transports TEXT[]` — Transport hints
-- `biometric_vault_key_encrypted TEXT` — Vault key encrypted with wrap key
-- `biometric_vault_key_iv TEXT` — IV for the above
+**IndexedDB architecture (`lib/vault-cache.ts`):**
+- Two object stores: `vault_items` (keyPath: id, indexes: user_id, item_type) and `metadata`
+- Stores ONLY encrypted ciphertext (same blobs as Supabase, never plaintext)
+- `synced: boolean` flag on each item for offline change tracking
+- Cache functions: `getCachedItems()`, `cacheItems()`, `cacheItem()`, `deleteCachedItem()`, `getUnsyncedItems()`
+
+**Sync logic (`lib/vault-sync.ts`):**
+- Online: Fetch from Supabase → push unsynced local items → cache everything in IndexedDB
+- Offline: Return cached items from IndexedDB
+- Reconnect: `setupSyncListeners()` watches `navigator.onLine` changes
+
+**WebAuthn enrollment (`lib/webauthn.ts` + `components/vault/BiometricEnroll.tsx`):**
+1. User clicks "Enable Biometric Unlock" in Settings
+2. Component prompts for master password (needed to wrap vault key)
+3. `navigator.credentials.create()` with `authenticatorAttachment: 'platform'`, `userVerification: 'required'`
+4. Vault key re-derived as EXTRACTABLE (one-time), raw bytes encrypted with vault key itself (AES-256-GCM)
+5. Encrypted blobs + credential ID + public key stored in `profiles` table
+6. Audit event `biometric_enrolled` logged
+
+**Biometric unlock (`lib/biometric-key.ts` + `components/vault/BiometricUnlock.tsx`):**
+- Shows on Dashboard lock screen when `profile.webauthn_credential_id` exists
+- Calls `navigator.credentials.get()` to verify biometric
+- 3-attempt limit before hiding biometric button
+- Note: Current implementation verifies biometric but still needs master password to unwrap key. True passwordless requires WebAuthn PRF extension (future iteration).
+
+**PWA install prompt (`components/vault/PWAInstallPrompt.tsx`):**
+- Catches `beforeinstallprompt` event on Chrome/Android
+- iOS detection shows "Tap Share → Add to Home Screen" instructions
+- 7-day dismissal memory via localStorage
+
+**New profiles columns (Phase 15C migration — already applied):**
+```sql
+webauthn_credential_id TEXT
+webauthn_public_key TEXT
+webauthn_transports TEXT[]
+biometric_vault_key_encrypted TEXT
+biometric_vault_key_iv TEXT
+```
 
 ---
 
@@ -337,4 +437,7 @@ NEXT_PUBLIC_APP_URL=https://password-mu.vercel.app
 - WebAuthn enrollment must use `userVerification: 'required'` — never 'discouraged'
 - Supabase RLS handles multi-tenancy — always confirm policies are active before storing data
 - TypeScript strict mode is on — no `any` types in crypto or vault modules
+- Root `tsconfig.json` excludes `extension/` — the extension has its own tsconfig
 - Follow Shorestack brand guidelines: Deep Ocean (#1b4965), Seafoam (#5fa8a0), Sand (#fcfbf8), Inter font, sharp corners, no shadows
+- `themeColor` uses the `viewport` export (not `metadata`) per Next.js best practices
+- Patch workflow for pushing changes: generate patch in cloud → save to `~/Desktop/Storage/Claude/password/` → user applies with `git apply` → commit and push
