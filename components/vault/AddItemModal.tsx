@@ -73,7 +73,7 @@ export default function AddItemModal({ isOpen, onClose, onSaved, editItem }: Add
     switch (itemType) {
       case 'login':
         return {
-          data: { name: loginName, username: loginUsername, password: loginPassword, url: loginUrl, notes: loginNotes },
+          data: { name: loginName, username: loginUsername, password: loginPassword, url: loginUrl && !loginUrl.match(/^https?:\/\//) ? `https://${loginUrl}` : loginUrl, notes: loginNotes },
           name: loginName,
         };
       case 'secure_note':
@@ -277,7 +277,7 @@ export default function AddItemModal({ isOpen, onClose, onSaved, editItem }: Add
               </div>
               <div>
                 <label className={labelClass}>URL</label>
-                <input type="url" value={loginUrl} onChange={(e) => setLoginUrl(e.target.value)} className={inputClass} placeholder="https://example.com" />
+                <input type="text" value={loginUrl} onChange={(e) => setLoginUrl(e.target.value)} className={inputClass} placeholder="example.com" />
               </div>
               <div>
                 <label className={labelClass}>Notes</label>
