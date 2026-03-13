@@ -12,7 +12,7 @@
 **Monetization:** Paid SaaS (no free tier) — Personal ($0.99/mo, 1 GB) / Plus ($1.99/mo, 10 GB) via Stripe.
 **Owner/Developer:** Brandon Day — Days Management LLC, Austin TX
 **Live URL:** https://password-mu.vercel.app
-**GitHub:** https://github.com/Brandondaymdr/password
+**GitHub:** https://github.com/Brandondaymdr/shorestack-vault
 **Supabase Project:** qdhwgzftpycdmovyniec
 
 ---

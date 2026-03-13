@@ -26,11 +26,11 @@ export default function VaultItemDetail({ item, onClose, onEdit, onDelete }: Vau
     return (
       <button
         onClick={() => copyToClipboard(value, field)}
-        className="shrink-0 text-gray-500 hover:text-emerald-400"
+        className="shrink-0 text-[#1b4965]/40 hover:text-[#5fa8a0]"
         title="Copy"
       >
         {copiedField === field ? (
-          <svg className="h-4 w-4 text-emerald-400" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+          <svg className="h-4 w-4 text-[#5fa8a0]" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
           </svg>
         ) : (
@@ -49,8 +49,8 @@ export default function VaultItemDetail({ item, onClose, onEdit, onDelete }: Vau
     return (
       <div className="flex items-start justify-between gap-4 py-3">
         <div className="min-w-0 flex-1">
-          <p className="text-xs text-gray-500">{label}</p>
-          <p className={`mt-0.5 break-all text-sm ${mono ? 'font-mono' : ''} ${secret && !showPassword ? 'text-gray-500' : 'text-white'}`}>
+          <p className="text-xs text-[#1b4965]/50">{label}</p>
+          <p className={`mt-0.5 break-all text-sm ${mono ? 'font-mono' : ''} ${secret && !showPassword ? 'text-[#1b4965]/50' : 'text-[#1b4965]'}`}>
             {displayed}
           </p>
         </div>
@@ -58,7 +58,7 @@ export default function VaultItemDetail({ item, onClose, onEdit, onDelete }: Vau
           {secret && (
             <button
               onClick={() => setShowPassword(!showPassword)}
-              className="text-gray-500 hover:text-white"
+              className="text-[#1b4965]/40 hover:text-[#1b4965]"
               title={showPassword ? 'Hide' : 'Show'}
             >
               {showPassword ? (
@@ -82,19 +82,19 @@ export default function VaultItemDetail({ item, onClose, onEdit, onDelete }: Vau
   const data = item.data;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 p-4 pt-16 backdrop-blur-sm">
-      <div className="w-full max-w-lg rounded-2xl border border-gray-700 bg-gray-900 shadow-2xl">
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/30 p-4 pt-16 backdrop-blur-sm">
+      <div className="w-full max-w-lg rounded-sm border border-[#1b4965]/15 bg-[#fcfbf8] shadow-lg">
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-gray-800 px-6 py-4">
+        <div className="flex items-center justify-between border-b border-[#1b4965]/15 px-6 py-4">
           <div>
-            <h2 className="text-lg font-semibold">{'name' in data ? data.name : 'Item'}</h2>
-            <p className="text-xs text-gray-500">{item.item_type.replace('_', ' ')}</p>
+            <h2 className="text-lg font-semibold text-[#1b4965]">{'name' in data ? data.name : 'Item'}</h2>
+            <p className="text-xs text-[#1b4965]/50">{item.item_type.replace('_', ' ')}</p>
           </div>
           <div className="flex items-center gap-2">
-            <button onClick={onEdit} className="rounded-lg border border-gray-700 px-3 py-1.5 text-sm text-gray-300 hover:bg-gray-800" title="Edit">
+            <button onClick={onEdit} className="rounded-sm border border-[#1b4965]/15 px-3 py-1.5 text-sm text-[#1b4965]/70 hover:bg-[#1b4965]/5" title="Edit">
               Edit
             </button>
-            <button onClick={onClose} className="text-gray-400 hover:text-white">
+            <button onClick={onClose} className="text-[#1b4965]/40 hover:text-[#1b4965]">
               <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
               </svg>
@@ -103,7 +103,7 @@ export default function VaultItemDetail({ item, onClose, onEdit, onDelete }: Vau
         </div>
 
         {/* Fields */}
-        <div className="divide-y divide-gray-800 px-6">
+        <div className="divide-y divide-[#1b4965]/10 px-6">
           {item.item_type === 'login' && (
             <>
               <Field label="Username / Email" value={(data as LoginItem).username} mono />
@@ -115,8 +115,8 @@ export default function VaultItemDetail({ item, onClose, onEdit, onDelete }: Vau
 
           {item.item_type === 'secure_note' && (
             <div className="py-3">
-              <p className="text-xs text-gray-500">Content</p>
-              <p className="mt-1 whitespace-pre-wrap text-sm text-white">{(data as SecureNoteItem).content}</p>
+              <p className="text-xs text-[#1b4965]/50">Content</p>
+              <p className="mt-1 whitespace-pre-wrap text-sm text-[#1b4965]">{(data as SecureNoteItem).content}</p>
             </div>
           )}
 
@@ -148,32 +148,32 @@ export default function VaultItemDetail({ item, onClose, onEdit, onDelete }: Vau
         </div>
 
         {/* Delete section */}
-        <div className="border-t border-gray-800 px-6 py-4">
+        <div className="border-t border-[#1b4965]/10 px-6 py-4">
           {!confirmDelete ? (
             <button
               onClick={() => setConfirmDelete(true)}
-              className="text-sm text-red-400 hover:text-red-300"
+              className="text-sm text-[#e76f51] hover:text-[#d65a3e]"
             >
               Delete this item
             </button>
           ) : (
             <div className="flex items-center gap-3">
-              <p className="text-sm text-red-400">Are you sure?</p>
+              <p className="text-sm text-[#e76f51]">Are you sure?</p>
               <button
                 onClick={onDelete}
-                className="rounded-lg bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-700"
+                className="rounded-sm bg-[#e76f51] px-3 py-1.5 text-sm font-medium text-white hover:bg-[#d65a3e]"
               >
                 Yes, Delete
               </button>
               <button
                 onClick={() => setConfirmDelete(false)}
-                className="rounded-lg border border-gray-700 px-3 py-1.5 text-sm text-gray-300 hover:bg-gray-800"
+                className="rounded-sm border border-[#1b4965]/15 px-3 py-1.5 text-sm text-[#1b4965]/70 hover:bg-[#1b4965]/5"
               >
                 Cancel
               </button>
             </div>
           )}
-          <p className="mt-1 text-xs text-gray-600">
+          <p className="mt-1 text-xs text-[#1b4965]/40">
             Updated {new Date(item.updated_at).toLocaleDateString()}
           </p>
         </div>

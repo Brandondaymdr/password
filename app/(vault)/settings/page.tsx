@@ -2,7 +2,7 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { createClient } from '@/lib/supabase';
-import { deriveVaultKey, encryptItem, decryptItem } from '@/lib/crypto';
+import { deriveVaultKey, encryptItem, decryptItem, createVaultVerifier } from '@/lib/crypto';
 import { VaultSession } from '@/lib/vault-session';
 import { useRouter, useSearchParams } from 'next/navigation';
 import PricingCards from '@/components/vault/PricingCards';
@@ -105,11 +105,20 @@ function SettingsContent() {
         }
       }
 
+      // Re-create vault verifier with the new key
+      const { encrypted: newVerifier, iv: newVerifierIv } = await createVaultVerifier(newKey);
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        await supabase
+          .from('profiles')
+          .update({ vault_verifier: newVerifier, vault_verifier_iv: newVerifierIv })
+          .eq('id', user.id);
+      }
+
       // Update session with new key
       VaultSession.set(newKey);
 
       // Audit log
-      const { data: { user } } = await supabase.auth.getUser();
       if (user) await supabase.from('vault_audit_log').insert({ user_id: user.id, action: 'edit' });
 
       setShowChangePw(false);

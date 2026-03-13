@@ -93,35 +93,35 @@ export default function DocumentUpload({ linkedItemId, onUploaded }: DocumentUpl
   return (
     <div>
       {error && (
-        <div className="mb-3 rounded-lg border border-red-800 bg-red-900/30 px-4 py-3 text-sm text-red-300">
+        <div className="mb-3 rounded-sm border border-[#e76f51]/30 bg-[#e76f51]/10 px-4 py-3 text-sm text-[#e76f51]">
           {error}
         </div>
       )}
 
       <label
-        className={`flex cursor-pointer flex-col items-center gap-2 rounded-xl border-2 border-dashed px-6 py-8 transition-colors ${
+        className={`flex cursor-pointer flex-col items-center gap-2 rounded-sm border-2 border-dashed px-6 py-8 transition-colors ${
           uploading
-            ? 'border-gray-700 bg-gray-800/30'
-            : 'border-gray-700 hover:border-emerald-500 hover:bg-emerald-900/10'
+            ? 'border-[#1b4965]/15 bg-[#1b4965]/5'
+            : 'border-[#1b4965]/15 hover:border-[#5fa8a0] hover:bg-[#5fa8a0]/5'
         }`}
       >
         {uploading ? (
           <>
-            <svg className="h-8 w-8 animate-spin text-emerald-400" fill="none" viewBox="0 0 24 24">
+            <svg className="h-8 w-8 animate-spin text-[#5fa8a0]" fill="none" viewBox="0 0 24 24">
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
             </svg>
-            <p className="text-sm text-gray-400">{progress}</p>
+            <p className="text-sm text-[#1b4965]/60">{progress}</p>
           </>
         ) : (
           <>
-            <svg className="h-8 w-8 text-gray-500" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+            <svg className="h-8 w-8 text-[#1b4965]/40" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" />
             </svg>
-            <p className="text-sm text-gray-400">
-              <span className="text-emerald-400">Click to upload</span> or drag files here
+            <p className="text-sm text-[#1b4965]/60">
+              <span className="text-[#5fa8a0]">Click to upload</span> or drag files here
             </p>
-            <p className="text-xs text-gray-600">Files are encrypted before upload</p>
+            <p className="text-xs text-[#1b4965]/40">Files are encrypted before upload</p>
           </>
         )}
         <input

@@ -47,26 +47,26 @@ export default function PasswordGenerator({ onSelect, className = '' }: Password
 
   // Password strength color
   function getStrengthColor(): string {
-    if (length >= 20 && symbols) return 'text-emerald-400';
-    if (length >= 16) return 'text-emerald-300';
-    if (length >= 12) return 'text-yellow-400';
-    return 'text-orange-400';
+    if (length >= 20 && symbols) return 'text-[#16a34a]';
+    if (length >= 16) return 'text-[#5fa8a0]';
+    if (length >= 12) return 'text-[#d97706]';
+    return 'text-[#e76f51]';
   }
 
   return (
-    <div className={`rounded-xl border border-gray-700 bg-gray-800/50 p-4 ${className}`}>
+    <div className={`rounded-sm border border-[#1b4965]/15 bg-white p-4 ${className}`}>
       {/* Generated password display */}
       <div className="mb-4 flex items-center gap-2">
-        <div className="flex-1 overflow-hidden rounded-lg bg-gray-900 px-4 py-3">
+        <div className="flex-1 overflow-hidden rounded-sm bg-[#1b4965]/5 px-4 py-3">
           <p className={`break-all font-mono text-sm ${getStrengthColor()}`}>{password}</p>
         </div>
         <button
           onClick={handleCopy}
-          className="shrink-0 rounded-lg border border-gray-600 p-2.5 text-gray-400 transition-colors hover:bg-gray-700 hover:text-white"
+          className="shrink-0 rounded-sm border border-[#1b4965]/15 p-2.5 text-[#1b4965]/60 transition-colors hover:bg-[#1b4965]/5 hover:text-[#1b4965]"
           title="Copy"
         >
           {copied ? (
-            <svg className="h-5 w-5 text-emerald-400" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+            <svg className="h-5 w-5 text-[#5fa8a0]" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
             </svg>
           ) : (
@@ -77,7 +77,7 @@ export default function PasswordGenerator({ onSelect, className = '' }: Password
         </button>
         <button
           onClick={regenerate}
-          className="shrink-0 rounded-lg border border-gray-600 p-2.5 text-gray-400 transition-colors hover:bg-gray-700 hover:text-white"
+          className="shrink-0 rounded-sm border border-[#1b4965]/15 p-2.5 text-[#1b4965]/60 transition-colors hover:bg-[#1b4965]/5 hover:text-[#1b4965]"
           title="Regenerate"
         >
           <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
@@ -89,8 +89,8 @@ export default function PasswordGenerator({ onSelect, className = '' }: Password
       {/* Length slider */}
       <div className="mb-4">
         <div className="mb-1 flex items-center justify-between">
-          <label className="text-sm text-gray-400">Length</label>
-          <span className="text-sm font-medium text-white">{length}</span>
+          <label className="text-sm text-[#1b4965]/70">Length</label>
+          <span className="text-sm font-medium text-[#1b4965]">{length}</span>
         </div>
         <input
           type="range"
@@ -101,7 +101,7 @@ export default function PasswordGenerator({ onSelect, className = '' }: Password
             setLength(Number(e.target.value));
             setTimeout(regenerate, 0);
           }}
-          className="w-full accent-emerald-500"
+          className="w-full accent-[#5fa8a0]"
         />
       </div>
 
@@ -113,7 +113,7 @@ export default function PasswordGenerator({ onSelect, className = '' }: Password
           { label: 'Numbers (0-9)', checked: numbers, set: setNumbers },
           { label: 'Symbols (!@#$)', checked: symbols, set: setSymbols },
         ].map(({ label, checked, set }) => (
-          <label key={label} className="flex items-center gap-2 text-sm text-gray-300">
+          <label key={label} className="flex items-center gap-2 text-sm text-[#1b4965]/70">
             <input
               type="checkbox"
               checked={checked}
@@ -121,12 +121,12 @@ export default function PasswordGenerator({ onSelect, className = '' }: Password
                 set(e.target.checked);
                 setTimeout(regenerate, 0);
               }}
-              className="rounded border-gray-600 bg-gray-700 text-emerald-500 focus:ring-emerald-500"
+              className="rounded border-[#1b4965]/20 bg-white text-[#5fa8a0] focus:ring-[#5fa8a0]"
             />
             {label}
           </label>
         ))}
-        <label className="flex items-center gap-2 text-sm text-gray-300">
+        <label className="flex items-center gap-2 text-sm text-[#1b4965]/70">
           <input
             type="checkbox"
             checked={excludeAmbiguous}
@@ -134,7 +134,7 @@ export default function PasswordGenerator({ onSelect, className = '' }: Password
               setExcludeAmbiguous(e.target.checked);
               setTimeout(regenerate, 0);
             }}
-            className="rounded border-gray-600 bg-gray-700 text-emerald-500 focus:ring-emerald-500"
+            className="rounded border-[#1b4965]/20 bg-white text-[#5fa8a0] focus:ring-[#5fa8a0]"
           />
           No ambiguous (Il1O0)
         </label>
@@ -144,7 +144,7 @@ export default function PasswordGenerator({ onSelect, className = '' }: Password
       {onSelect && (
         <button
           onClick={handleUse}
-          className="w-full rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-700"
+          className="w-full rounded-sm bg-[#5fa8a0] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#4d8f87]"
         >
           Use This Password
         </button>

@@ -183,16 +183,16 @@ export default function AddItemModal({ isOpen, onClose, onSaved, editItem }: Add
 
   if (!isOpen) return null;
 
-  const inputClass = 'block w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2.5 text-sm text-white placeholder-gray-500 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500';
-  const labelClass = 'block text-sm font-medium text-gray-400 mb-1';
+  const inputClass = 'block w-full rounded-sm border border-[#1b4965]/15 bg-white px-3 py-2.5 text-sm text-[#1b4965] placeholder-[#1b4965]/40 focus:border-[#5fa8a0] focus:outline-none focus:ring-1 focus:ring-[#5fa8a0]';
+  const labelClass = 'block text-sm font-medium text-[#1b4965]/70 mb-1';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 p-4 pt-16 backdrop-blur-sm">
-      <div className="w-full max-w-lg rounded-2xl border border-gray-700 bg-gray-900 shadow-2xl">
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/30 p-4 pt-16 backdrop-blur-sm">
+      <div className="w-full max-w-lg rounded-sm border border-[#1b4965]/15 bg-[#fcfbf8] shadow-lg">
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-gray-800 px-6 py-4">
-          <h2 className="text-lg font-semibold">{isEditing ? 'Edit Item' : 'Add New Item'}</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-white">
+        <div className="flex items-center justify-between border-b border-[#1b4965]/15 px-6 py-4">
+          <h2 className="text-lg font-semibold text-[#1b4965]">{isEditing ? 'Edit Item' : 'Add New Item'}</h2>
+          <button onClick={onClose} className="text-[#1b4965]/40 hover:text-[#1b4965]">
             <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
             </svg>
@@ -201,7 +201,7 @@ export default function AddItemModal({ isOpen, onClose, onSaved, editItem }: Add
 
         <form onSubmit={handleSave} className="px-6 py-4">
           {error && (
-            <div className="mb-4 rounded-lg border border-red-800 bg-red-900/30 px-4 py-3 text-sm text-red-300">
+            <div className="mb-4 rounded-sm border border-[#e76f51]/30 bg-[#e76f51]/10 px-4 py-3 text-sm text-[#e76f51]">
               {error}
             </div>
           )}
@@ -221,10 +221,10 @@ export default function AddItemModal({ isOpen, onClose, onSaved, editItem }: Add
                     key={type}
                     type="button"
                     onClick={() => setItemType(type)}
-                    className={`rounded-lg border px-3 py-2 text-center text-sm transition-colors ${
+                    className={`rounded-sm border px-3 py-2 text-center text-sm transition-colors ${
                       itemType === type
-                        ? 'border-emerald-500 bg-emerald-900/30 text-emerald-300'
-                        : 'border-gray-700 text-gray-400 hover:border-gray-600'
+                        ? 'border-[#5fa8a0] bg-[#5fa8a0]/10 text-[#5fa8a0]'
+                        : 'border-[#1b4965]/15 text-[#1b4965]/60 hover:border-[#1b4965]/30'
                     }`}
                   >
                     <span className="block text-lg">{icon}</span>
@@ -236,12 +236,12 @@ export default function AddItemModal({ isOpen, onClose, onSaved, editItem }: Add
           )}
 
           {/* Favorite toggle */}
-          <label className="mb-4 flex items-center gap-2 text-sm text-gray-300">
+          <label className="mb-4 flex items-center gap-2 text-sm text-[#1b4965]/70">
             <input
               type="checkbox"
               checked={favorite}
               onChange={(e) => setFavorite(e.target.checked)}
-              className="rounded border-gray-600 bg-gray-700 text-yellow-500 focus:ring-yellow-500"
+              className="rounded border-[#1b4965]/20 bg-white text-[#d97706] focus:ring-[#d97706]"
             />
             Mark as favorite
           </label>
@@ -264,7 +264,7 @@ export default function AddItemModal({ isOpen, onClose, onSaved, editItem }: Add
                   <button
                     type="button"
                     onClick={() => setShowGenerator(!showGenerator)}
-                    className="shrink-0 rounded-lg border border-gray-600 px-3 text-sm text-gray-400 transition-colors hover:bg-gray-700 hover:text-white"
+                    className="shrink-0 rounded-sm border border-[#1b4965]/15 px-3 text-sm text-[#1b4965]/60 transition-colors hover:bg-[#1b4965]/5 hover:text-[#1b4965]"
                   >
                     Generate
                   </button>
@@ -399,14 +399,14 @@ export default function AddItemModal({ isOpen, onClose, onSaved, editItem }: Add
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 rounded-lg border border-gray-700 px-4 py-2.5 text-sm font-medium text-gray-300 transition-colors hover:bg-gray-800"
+              className="flex-1 rounded-sm border border-[#1b4965]/15 px-4 py-2.5 text-sm font-medium text-[#1b4965]/70 transition-colors hover:bg-[#1b4965]/5"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={saving}
-              className="flex-1 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-emerald-700 disabled:opacity-50"
+              className="flex-1 rounded-sm bg-[#5fa8a0] px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-[#4d8f87] disabled:opacity-50"
             >
               {saving ? 'Saving...' : isEditing ? 'Update' : 'Save'}
             </button>
