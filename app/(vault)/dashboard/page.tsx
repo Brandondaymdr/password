@@ -8,7 +8,6 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import AddItemModal from '@/components/vault/AddItemModal';
 import VaultItemDetail from '@/components/vault/VaultItemDetail';
-import BiometricUnlock from '@/components/vault/BiometricUnlock';
 import PWAInstallPrompt from '@/components/vault/PWAInstallPrompt';
 import type { Profile, VaultItemRow, VaultItemType, DecryptedVaultItem, DecryptedItemData, LoginItem } from '@/types/vault';
 
@@ -196,29 +195,8 @@ export default function DashboardPage() {
             <input type="password" value={masterPassword} onChange={(e) => setMasterPassword(e.target.value)} className="block w-full rounded-sm border border-[#1b4965]/15 bg-white px-4 py-3 text-[#1b4965] placeholder-[#1b4965]/40 focus:border-[#5fa8a0] focus:outline-none focus:ring-1 focus:ring-[#5fa8a0]" placeholder="Master password" autoFocus />
             <button type="submit" disabled={unlocking} className="w-full rounded-sm bg-[#5fa8a0] px-4 py-3 font-medium text-white transition-colors hover:bg-[#4d8f87] disabled:opacity-50">{unlocking ? 'Unlocking...' : 'Unlock Vault'}</button>
           </form>
-          {/* Biometric unlock option */}
-          {profile?.webauthn_credential_id && profile?.biometric_vault_key_encrypted && profile?.biometric_vault_key_iv && (
-            <div className="pt-2">
-              <div className="relative flex items-center py-2">
-                <div className="flex-grow border-t border-[#1b4965]/10" />
-                <span className="mx-3 text-xs text-[#1b4965]/40">or</span>
-                <div className="flex-grow border-t border-[#1b4965]/10" />
-              </div>
-              <BiometricUnlock
-                onSuccess={(vaultKey) => {
-                  VaultSession.set(vaultKey);
-                  setNeedsMasterPassword(false);
-                  setMasterPassword('');
-                  loadItems().then(() => setLoading(false));
-                }}
-                credentialId={profile.webauthn_credential_id}
-                encryptedVaultKey={profile.biometric_vault_key_encrypted}
-                encryptedVaultKeyIv={profile.biometric_vault_key_iv}
-                kdfSalt={profile.kdf_salt}
-                kdfIterations={profile.kdf_iterations}
-              />
-            </div>
-          )}
+          {/* Biometric unlock — disabled until server-side WebAuthn is implemented */}
+          {/* TODO: Re-enable once WebAuthn ceremony is verified server-side */}
 
           <button onClick={handleSignOut} className="w-full text-center text-sm text-[#1b4965]/60 hover:text-[#1b4965]">Sign out</button>
         </div>

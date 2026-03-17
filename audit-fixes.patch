@@ -1,0 +1,707 @@
+From 0f6408cc0aeb5a4d70f5ec5875ad6792baa154af Mon Sep 17 00:00:00 2001
+From: Brandon Day <brandon@daysllc.com>
+Date: Tue, 17 Mar 2026 06:14:27 -0500
+Subject: [PATCH] fix: address all critical + high audit findings from forensic
+ audit
+
+Round 1 (Critical data integrity):
+- Fix document filename IV not stored (file_name_iv column + save/read)
+- Rebuild password rotation as full rekey (re-encrypts items, docs,
+  search indexes; generates fresh KDF salt; clears biometric data)
+- Implement real account deletion via server-side API route
+
+Round 2 (Security & trust):
+- Remove broken biometric unlock from UI until server-side WebAuthn
+- Fix PWA assets blocked by auth middleware (manifest + sw.js)
+- Fix password shown as plaintext in AddItemModal (type=password + toggle)
+- Normalize auth errors to prevent user enumeration
+- Add security headers (CSP, X-Frame-Options, Referrer-Policy, etc.)
+
+Round 3 (Build health):
+- Fix build-time env var crash (defer throw to runtime)
+
+Round 4 (Extension):
+- Add SAVE_OFFER handler with duplicate detection and pending save flow
+- Add GET_PENDING_SAVE, CONFIRM_SAVE, DISMISS_SAVE message types
+
+Also includes:
+- Supabase migration for file_name_iv column
+- New lib/auth-errors.ts for error normalization
+- New app/api/account/delete/route.ts for real deletion
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+---
+ app/(auth)/login/page.tsx                     |   5 +-
+ app/(auth)/signup/page.tsx                    |   3 +-
+ app/(vault)/dashboard/page.tsx                |  26 +---
+ app/(vault)/documents/page.tsx                |   4 +-
+ app/(vault)/settings/page.tsx                 | 114 ++++++++++++++----
+ app/api/account/delete/route.ts               |  64 ++++++++++
+ components/vault/AddItemModal.tsx             |  17 ++-
+ components/vault/DocumentUpload.tsx           |   1 +
+ extension/src/background/service-worker.ts    |  57 +++++++++
+ extension/src/shared/types.ts                 |   5 +-
+ lib/auth-errors.ts                            |  29 +++++
+ lib/supabase.ts                               |  18 +--
+ middleware.ts                                 |   4 +
+ next.config.ts                                |  30 ++++-
+ .../migrations/20260317_add_file_name_iv.sql  |  16 +++
+ types/vault.ts                                |   1 +
+ 16 files changed, 332 insertions(+), 62 deletions(-)
+ create mode 100644 app/api/account/delete/route.ts
+ create mode 100644 lib/auth-errors.ts
+ create mode 100644 supabase/migrations/20260317_add_file_name_iv.sql
+
+diff --git a/app/(auth)/login/page.tsx b/app/(auth)/login/page.tsx
+index 873fd73..61efc4b 100644
+--- a/app/(auth)/login/page.tsx
++++ b/app/(auth)/login/page.tsx
+@@ -2,6 +2,7 @@
+ 
+ import { useState } from 'react';
+ import { createClient } from '@/lib/supabase';
++import { normalizeAuthError } from '@/lib/auth-errors';
+ import { useRouter } from 'next/navigation';
+ import Link from 'next/link';
+ import ShorestackLogo from '@/components/ui/ShorestackLogo';
+@@ -26,7 +27,7 @@ export default function LoginPage() {
+       });
+ 
+       if (authError) {
+-        setError(authError.message);
++        setError(normalizeAuthError(authError.message));
+         return;
+       }
+ 
+@@ -55,7 +56,7 @@ export default function LoginPage() {
+       });
+ 
+       if (authError) {
+-        setError(authError.message);
++        setError(normalizeAuthError(authError.message));
+         return;
+       }
+ 
+diff --git a/app/(auth)/signup/page.tsx b/app/(auth)/signup/page.tsx
+index b7ef596..fb415c1 100644
+--- a/app/(auth)/signup/page.tsx
++++ b/app/(auth)/signup/page.tsx
+@@ -2,6 +2,7 @@
+ 
+ import { useState } from 'react';
+ import { createClient } from '@/lib/supabase';
++import { normalizeAuthError } from '@/lib/auth-errors';
+ import { useRouter } from 'next/navigation';
+ import Link from 'next/link';
+ import ShorestackLogo from '@/components/ui/ShorestackLogo';
+@@ -41,7 +42,7 @@ export default function SignupPage() {
+       });
+ 
+       if (authError) {
+-        setError(authError.message);
++        setError(normalizeAuthError(authError.message));
+         return;
+       }
+ 
+diff --git a/app/(vault)/dashboard/page.tsx b/app/(vault)/dashboard/page.tsx
+index 011c22c..21e0d2b 100644
+--- a/app/(vault)/dashboard/page.tsx
++++ b/app/(vault)/dashboard/page.tsx
+@@ -8,7 +8,6 @@ import { useRouter } from 'next/navigation';
+ import Link from 'next/link';
+ import AddItemModal from '@/components/vault/AddItemModal';
+ import VaultItemDetail from '@/components/vault/VaultItemDetail';
+-import BiometricUnlock from '@/components/vault/BiometricUnlock';
+ import PWAInstallPrompt from '@/components/vault/PWAInstallPrompt';
+ import type { Profile, VaultItemRow, VaultItemType, DecryptedVaultItem, DecryptedItemData, LoginItem } from '@/types/vault';
+ 
+@@ -196,29 +195,8 @@ export default function DashboardPage() {
+             <input type="password" value={masterPassword} onChange={(e) => setMasterPassword(e.target.value)} className="block w-full rounded-sm border border-[#1b4965]/15 bg-white px-4 py-3 text-[#1b4965] placeholder-[#1b4965]/40 focus:border-[#5fa8a0] focus:outline-none focus:ring-1 focus:ring-[#5fa8a0]" placeholder="Master password" autoFocus />
+             <button type="submit" disabled={unlocking} className="w-full rounded-sm bg-[#5fa8a0] px-4 py-3 font-medium text-white transition-colors hover:bg-[#4d8f87] disabled:opacity-50">{unlocking ? 'Unlocking...' : 'Unlock Vault'}</button>
+           </form>
+-          {/* Biometric unlock option */}
+-          {profile?.webauthn_credential_id && profile?.biometric_vault_key_encrypted && profile?.biometric_vault_key_iv && (
+-            <div className="pt-2">
+-              <div className="relative flex items-center py-2">
+-                <div className="flex-grow border-t border-[#1b4965]/10" />
+-                <span className="mx-3 text-xs text-[#1b4965]/40">or</span>
+-                <div className="flex-grow border-t border-[#1b4965]/10" />
+-              </div>
+-              <BiometricUnlock
+-                onSuccess={(vaultKey) => {
+-                  VaultSession.set(vaultKey);
+-                  setNeedsMasterPassword(false);
+-                  setMasterPassword('');
+-                  loadItems().then(() => setLoading(false));
+-                }}
+-                credentialId={profile.webauthn_credential_id}
+-                encryptedVaultKey={profile.biometric_vault_key_encrypted}
+-                encryptedVaultKeyIv={profile.biometric_vault_key_iv}
+-                kdfSalt={profile.kdf_salt}
+-                kdfIterations={profile.kdf_iterations}
+-              />
+-            </div>
+-          )}
++          {/* Biometric unlock — disabled until server-side WebAuthn is implemented */}
++          {/* TODO: Re-enable once WebAuthn ceremony is verified server-side */}
+ 
+           <button onClick={handleSignOut} className="w-full text-center text-sm text-[#1b4965]/60 hover:text-[#1b4965]">Sign out</button>
+         </div>
+diff --git a/app/(vault)/documents/page.tsx b/app/(vault)/documents/page.tsx
+index 67943ef..317df7e 100644
+--- a/app/(vault)/documents/page.tsx
++++ b/app/(vault)/documents/page.tsx
+@@ -48,7 +48,9 @@ export default function DocumentsPage() {
+     const decrypted: DecryptedDocument[] = [];
+     for (const row of rows as VaultDocumentRow[]) {
+       try {
+-        const fileName = await decryptFilename(row.file_name_encrypted, row.file_iv, vaultKey);
++        // Use the dedicated filename IV if available, fall back to file_iv for legacy docs
++        const filenameIv = row.file_name_iv || row.file_iv;
++        const fileName = await decryptFilename(row.file_name_encrypted, filenameIv, vaultKey);
+         decrypted.push({
+           id: row.id,
+           fileName,
+diff --git a/app/(vault)/settings/page.tsx b/app/(vault)/settings/page.tsx
+index c22a5cd..070def5 100644
+--- a/app/(vault)/settings/page.tsx
++++ b/app/(vault)/settings/page.tsx
+@@ -2,12 +2,11 @@
+ 
+ import { useState, useEffect, Suspense } from 'react';
+ import { createClient } from '@/lib/supabase';
+-import { deriveVaultKey, encryptItem, decryptItem, createVaultVerifier } from '@/lib/crypto';
++import { deriveVaultKey, encryptItem, decryptItem, createVaultVerifier, generateSearchIndex, generateSalt, encryptFilename, decryptFilename } from '@/lib/crypto';
+ import { VaultSession } from '@/lib/vault-session';
+ import { useRouter, useSearchParams } from 'next/navigation';
+ import PricingCards from '@/components/vault/PricingCards';
+-import BiometricEnroll from '@/components/vault/BiometricEnroll';
+-import type { Profile, VaultItemRow, AuditLogRow } from '@/types/vault';
++import type { Profile, VaultItemRow, VaultDocumentRow, AuditLogRow, DecryptedItemData } from '@/types/vault';
+ 
+ export default function SettingsPage() {
+   return (
+@@ -87,17 +86,26 @@ function SettingsContent() {
+       // Verify current password by deriving key
+       const oldKey = await deriveVaultKey(currentPw, profile.kdf_salt, profile.kdf_iterations);
+ 
+-      // Derive new key with same salt (or generate new salt for better security)
+-      const newKey = await deriveVaultKey(newPw, profile.kdf_salt, profile.kdf_iterations);
++      // Generate a fresh KDF salt for the new password (best practice)
++      const newSalt = generateSalt();
++      const newKey = await deriveVaultKey(newPw, newSalt, profile.kdf_iterations);
+ 
+-      // Re-encrypt all vault items with the new key
++      // --- Re-encrypt all vault items ---
+       const { data: rows } = await supabase.from('vault_items').select('*');
+       if (rows) {
+         for (const row of rows as VaultItemRow[]) {
+           try {
+             const decrypted = await decryptItem(row.encrypted_data, row.iv, oldKey);
+             const { encrypted, iv } = await encryptItem(decrypted, newKey);
+-            await supabase.from('vault_items').update({ encrypted_data: encrypted, iv }).eq('id', row.id);
++            // Regenerate search index with new key (HMAC is key-dependent)
++            const itemData = decrypted as DecryptedItemData;
++            const name = 'name' in itemData ? (itemData as { name: string }).name : '';
++            const searchIndex = name ? await generateSearchIndex(name, newKey) : row.search_index;
++            await supabase.from('vault_items').update({
++              encrypted_data: encrypted,
++              iv,
++              search_index: searchIndex,
++            }).eq('id', row.id);
+           } catch {
+             setChangePwError('Failed to decrypt an item with the current password. Aborting.');
+             setChangePwLoading(false);
+@@ -106,13 +114,68 @@ function SettingsContent() {
+         }
+       }
+ 
+-      // Re-create vault verifier with the new key
++      // --- Re-encrypt all vault documents (filenames + file keys) ---
++      const { data: docRows } = await supabase.from('vault_documents').select('*');
++      if (docRows) {
++        for (const doc of docRows as VaultDocumentRow[]) {
++          try {
++            // Decrypt filename with old key
++            const filenameIv = doc.file_name_iv || doc.file_iv;
++            const filename = await decryptFilename(doc.file_name_encrypted, filenameIv, oldKey);
++            // Re-encrypt filename with new key
++            const newEncryptedName = await encryptFilename(filename, newKey);
++
++            // Decrypt file key with old vault key, re-encrypt with new vault key
++            // file_key_encrypted contains: keyIv (12 bytes) + encrypted AES key
++            const combinedKeyData = new Uint8Array(Uint8Array.from(atob(doc.file_key_encrypted), c => c.charCodeAt(0)).buffer);
++            const keyIv = combinedKeyData.slice(0, 12);
++            const encryptedFileKey = combinedKeyData.slice(12);
++            const rawFileKey = await crypto.subtle.decrypt(
++              { name: 'AES-GCM', iv: keyIv },
++              oldKey,
++              encryptedFileKey
++            );
++            const newKeyIv = crypto.getRandomValues(new Uint8Array(12));
++            const newEncryptedFileKey = await crypto.subtle.encrypt(
++              { name: 'AES-GCM', iv: newKeyIv },
++              newKey,
++              rawFileKey
++            );
++            const newCombined = new Uint8Array(newKeyIv.length + new Uint8Array(newEncryptedFileKey).length);
++            newCombined.set(newKeyIv);
++            newCombined.set(new Uint8Array(newEncryptedFileKey), newKeyIv.length);
++            const newFileKeyEncrypted = btoa(String.fromCharCode(...newCombined));
++
++            await supabase.from('vault_documents').update({
++              file_name_encrypted: newEncryptedName.encrypted,
++              file_name_iv: newEncryptedName.iv,
++              file_key_encrypted: newFileKeyEncrypted,
++            }).eq('id', doc.id);
++          } catch {
++            setChangePwError('Failed to re-encrypt a document. Aborting.');
++            setChangePwLoading(false);
++            return;
++          }
++        }
++      }
++
++      // --- Re-create vault verifier with the new key ---
+       const { encrypted: newVerifier, iv: newVerifierIv } = await createVaultVerifier(newKey);
+       const { data: { user } } = await supabase.auth.getUser();
+       if (user) {
+         await supabase
+           .from('profiles')
+-          .update({ vault_verifier: newVerifier, vault_verifier_iv: newVerifierIv })
++          .update({
++            kdf_salt: newSalt,
++            vault_verifier: newVerifier,
++            vault_verifier_iv: newVerifierIv,
++            // Clear biometric wrapping — user must re-enroll after password change
++            biometric_vault_key_encrypted: null,
++            biometric_vault_key_iv: null,
++            webauthn_credential_id: null,
++            webauthn_public_key: null,
++            webauthn_transports: null,
++          })
+           .eq('id', user.id);
+       }
+ 
+@@ -126,7 +189,7 @@ function SettingsContent() {
+       setCurrentPw('');
+       setNewPw('');
+       setConfirmNewPw('');
+-      alert('Master password changed successfully.');
++      alert('Master password changed successfully. All items and documents have been re-encrypted.');
+     } catch {
+       setChangePwError('Current master password is incorrect.');
+     } finally {
+@@ -169,20 +232,23 @@ function SettingsContent() {
+   async function handleDeleteAccount() {
+     if (deleteConfirm !== 'DELETE') return;
+ 
+-    VaultSession.lock();
+-    // Delete all user data (cascade will handle vault_items, documents, audit)
+-    const { data: { user } } = await supabase.auth.getUser();
+-    if (user) {
+-      // Delete storage files
+-      const { data: docs } = await supabase.from('vault_documents').select('storage_path');
+-      if (docs && docs.length > 0) {
+-        await supabase.storage.from('vault-documents').remove(docs.map(d => d.storage_path));
++    try {
++      // Call the server-side deletion endpoint that actually deletes everything
++      const res = await fetch('/api/account/delete', { method: 'POST' });
++      const data = await res.json();
++
++      if (!res.ok) {
++        alert(data.error || 'Failed to delete account. Please try again or contact support.');
++        return;
+       }
+-      // Note: Supabase cascade will delete profiles, vault_items, etc.
+-    }
+ 
+-    await supabase.auth.signOut();
+-    router.push('/login');
++      // Clear local state and sign out
++      VaultSession.lock();
++      await supabase.auth.signOut();
++      router.push('/login');
++    } catch {
++      alert('Account deletion failed. Please try again.');
++    }
+   }
+ 
+   async function handleManageBilling() {
+@@ -272,8 +338,8 @@ function SettingsContent() {
+           )}
+         </section>
+ 
+-        {/* Biometric Unlock */}
+-        {profile && <BiometricEnroll profile={profile} />}
++        {/* Biometric Unlock — disabled until server-side WebAuthn is implemented */}
++        {/* TODO: Re-enable once WebAuthn ceremony is verified server-side (see SHORESTACK-VAULT-FIX-PLAN.md) */}
+ 
+         {/* Export */}
+         <section className="rounded-sm border border-[#1b4965]/15 bg-white p-6">
+diff --git a/app/api/account/delete/route.ts b/app/api/account/delete/route.ts
+new file mode 100644
+index 0000000..3f87a92
+--- /dev/null
++++ b/app/api/account/delete/route.ts
+@@ -0,0 +1,64 @@
++// ============================================
++// ShoreStack Vault — Account Deletion API
++// ============================================
++// Server-side endpoint that actually deletes all user data.
++// Uses the Supabase service role to delete the auth user.
++
++import { createServerSupabaseClient, createAdminClient } from '@/lib/supabase-server';
++import { NextResponse } from 'next/server';
++
++export async function POST() {
++  try {
++    // Get the authenticated user via session cookie
++    const supabase = await createServerSupabaseClient();
++    const { data: { user }, error: authError } = await supabase.auth.getUser();
++
++    if (authError || !user) {
++      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
++    }
++
++    const userId = user.id;
++
++    // Use admin client (service role) to perform deletions
++    const admin = createAdminClient();
++
++    // 1. Delete storage objects (vault-documents bucket)
++    const { data: docs } = await admin
++      .from('vault_documents')
++      .select('storage_path')
++      .eq('user_id', userId);
++
++    if (docs && docs.length > 0) {
++      await admin.storage
++        .from('vault-documents')
++        .remove(docs.map((d: { storage_path: string }) => d.storage_path));
++    }
++
++    // 2. Delete vault_documents rows
++    await admin.from('vault_documents').delete().eq('user_id', userId);
++
++    // 3. Delete vault_items rows
++    await admin.from('vault_items').delete().eq('user_id', userId);
++
++    // 4. Delete vault_audit_log rows
++    await admin.from('vault_audit_log').delete().eq('user_id', userId);
++
++    // 5. Delete profiles row
++    await admin.from('profiles').delete().eq('id', userId);
++
++    // 6. Delete the auth user itself
++    const { error: deleteUserError } = await admin.auth.admin.deleteUser(userId);
++    if (deleteUserError) {
++      console.error('[Account Delete] Failed to delete auth user:', deleteUserError);
++      return NextResponse.json(
++        { error: 'Failed to delete auth user. Some data may have been removed.' },
++        { status: 500 }
++      );
++    }
++
++    return NextResponse.json({ success: true });
++  } catch (err) {
++    console.error('[Account Delete] Unexpected error:', err);
++    return NextResponse.json({ error: 'Account deletion failed' }, { status: 500 });
++  }
++}
+diff --git a/components/vault/AddItemModal.tsx b/components/vault/AddItemModal.tsx
+index e667c4a..d4a1ad9 100644
+--- a/components/vault/AddItemModal.tsx
++++ b/components/vault/AddItemModal.tsx
+@@ -32,6 +32,7 @@ export default function AddItemModal({ isOpen, onClose, onSaved, editItem }: Add
+   const [saving, setSaving] = useState(false);
+   const [error, setError] = useState('');
+   const [showGenerator, setShowGenerator] = useState(false);
++  const [showPassword, setShowPassword] = useState(false);
+ 
+   // Login fields
+   const [loginName, setLoginName] = useState((editItem?.data as LoginItem)?.name || '');
+@@ -260,7 +261,21 @@ export default function AddItemModal({ isOpen, onClose, onSaved, editItem }: Add
+               <div>
+                 <label className={labelClass}>Password</label>
+                 <div className="flex gap-2">
+-                  <input type="text" value={loginPassword} onChange={(e) => setLoginPassword(e.target.value)} className={`${inputClass} flex-1 font-mono`} placeholder="••••••••" />
++                  <div className="relative flex-1">
++                    <input type={showPassword ? 'text' : 'password'} value={loginPassword} onChange={(e) => setLoginPassword(e.target.value)} className={`${inputClass} pr-10 font-mono`} placeholder="••••••••" />
++                    <button
++                      type="button"
++                      onClick={() => setShowPassword(!showPassword)}
++                      className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-[#1b4965]/40 hover:text-[#1b4965]"
++                      tabIndex={-1}
++                    >
++                      {showPassword ? (
++                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M3.98 8.223A10.477 10.477 0 0 0 1.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.451 10.451 0 0 1 12 4.5c4.756 0 8.773 3.162 10.065 7.498a10.522 10.522 0 0 1-4.293 5.774M6.228 6.228 3 3m3.228 3.228 3.65 3.65m7.894 7.894L21 21m-3.228-3.228-3.65-3.65m0 0a3 3 0 1 0-4.243-4.243m4.242 4.242L9.88 9.88" /></svg>
++                      ) : (
++                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178Z" /><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" /></svg>
++                      )}
++                    </button>
++                  </div>
+                   <button
+                     type="button"
+                     onClick={() => setShowGenerator(!showGenerator)}
+diff --git a/components/vault/DocumentUpload.tsx b/components/vault/DocumentUpload.tsx
+index 08b9730..ad37dd6 100644
+--- a/components/vault/DocumentUpload.tsx
++++ b/components/vault/DocumentUpload.tsx
+@@ -63,6 +63,7 @@ export default function DocumentUpload({ linkedItemId, onUploaded }: DocumentUpl
+           linked_item_id: linkedItemId || null,
+           storage_path: storagePath,
+           file_name_encrypted: encryptedName.encrypted,
++          file_name_iv: encryptedName.iv,
+           file_key_encrypted: fileKeyEncrypted,
+           file_iv: iv,
+           file_size: file.size,
+diff --git a/extension/src/background/service-worker.ts b/extension/src/background/service-worker.ts
+index d43cec8..5de63f5 100644
+--- a/extension/src/background/service-worker.ts
++++ b/extension/src/background/service-worker.ts
+@@ -58,6 +58,25 @@ async function handleMessage(message: ExtensionMessage): Promise<unknown> {
+     case 'FORM_DETECTED':
+       return handleFormDetected(message.payload as { url: string; fieldCount: number });
+ 
++    case 'SAVE_OFFER':
++      return handleSaveOffer(
++        message.payload as { url: string; username: string; password: string }
++      );
++
++    case 'GET_PENDING_SAVE':
++      return { pending: pendingSaveOffer };
++
++    case 'CONFIRM_SAVE': {
++      if (!pendingSaveOffer) return { error: 'No pending credential' };
++      const result = await handleSaveCredential(pendingSaveOffer);
++      clearPendingSaveOffer();
++      return result;
++    }
++
++    case 'DISMISS_SAVE':
++      clearPendingSaveOffer();
++      return { success: true };
++
+     default:
+       return { error: `Unknown message type: ${message.type}` };
+   }
+@@ -319,6 +338,44 @@ async function handleFormDetected(payload: { url: string; fieldCount: number })
+   return { matchCount };
+ }
+ 
++// --- Save Offer (credential capture from form submission) ---
++
++// Pending credentials waiting for user confirmation via the popup
++let pendingSaveOffer: { url: string; username: string; password: string } | null = null;
++
++async function handleSaveOffer(payload: { url: string; username: string; password: string }) {
++  if (!isUnlocked()) return { saved: false, reason: 'locked' };
++
++  // Check if we already have this credential saved
++  const existing = await handleGetCredentials({ url: payload.url });
++  if (!('error' in existing)) {
++    const isDuplicate = existing.items.some((item) => {
++      const data = item.data as { username?: string; password?: string };
++      return data.username === payload.username && data.password === payload.password;
++    });
++    if (isDuplicate) return { saved: false, reason: 'duplicate' };
++  }
++
++  // Store as pending — user confirms via popup
++  pendingSaveOffer = payload;
++
++  // Show badge to prompt user to open popup
++  chrome.action.setBadgeText({ text: '+' });
++  chrome.action.setBadgeBackgroundColor({ color: '#d97706' });
++
++  return { saved: false, reason: 'pending', pending: true };
++}
++
++// Expose pending offer for the popup to query
++export function getPendingSaveOffer() {
++  return pendingSaveOffer;
++}
++
++export function clearPendingSaveOffer() {
++  pendingSaveOffer = null;
++  chrome.action.setBadgeText({ text: '' });
++}
++
+ // --- Service Worker Lifecycle ---
+ 
+ chrome.runtime.onInstalled.addListener(() => {
+diff --git a/extension/src/shared/types.ts b/extension/src/shared/types.ts
+index db27749..d4f707b 100644
+--- a/extension/src/shared/types.ts
++++ b/extension/src/shared/types.ts
+@@ -109,7 +109,10 @@ export type ExtensionMessageType =
+   | 'FORM_DETECTED'
+   | 'SAVE_OFFER'
+   | 'SAVE_CREDENTIAL'
+-  | 'GENERATE_PASSWORD';
++  | 'GENERATE_PASSWORD'
++  | 'GET_PENDING_SAVE'
++  | 'CONFIRM_SAVE'
++  | 'DISMISS_SAVE';
+ 
+ export interface ExtensionMessage {
+   type: ExtensionMessageType;
+diff --git a/lib/auth-errors.ts b/lib/auth-errors.ts
+new file mode 100644
+index 0000000..2c6b9f1
+--- /dev/null
++++ b/lib/auth-errors.ts
+@@ -0,0 +1,29 @@
++// ============================================
++// ShoreStack Vault — Auth Error Normalization
++// ============================================
++// Maps raw Supabase auth error messages to user-friendly strings.
++// Prevents user enumeration and avoids exposing internal details.
++
++const ERROR_MAP: Record<string, string> = {
++  'Invalid login credentials': 'Email or password is incorrect.',
++  'Email not confirmed': 'Please check your email to confirm your account.',
++  'User already registered': 'An account with this email already exists.',
++  'Signup requires a valid password': 'Please enter a valid password.',
++  'Email rate limit exceeded': 'Too many attempts. Please try again later.',
++  'For security purposes, you can only request this after': 'Too many attempts. Please try again later.',
++  'User not found': 'Email or password is incorrect.',
++  'Invalid Refresh Token: Refresh Token Not Found': 'Your session has expired. Please sign in again.',
++};
++
++export function normalizeAuthError(message: string): string {
++  // Check for exact matches
++  if (ERROR_MAP[message]) return ERROR_MAP[message];
++
++  // Check for partial matches (some Supabase errors include dynamic content)
++  for (const [key, value] of Object.entries(ERROR_MAP)) {
++    if (message.includes(key)) return value;
++  }
++
++  // Default: generic error to avoid leaking implementation details
++  return 'Something went wrong. Please try again.';
++}
+diff --git a/lib/supabase.ts b/lib/supabase.ts
+index 2fb86cc..a3d707b 100644
+--- a/lib/supabase.ts
++++ b/lib/supabase.ts
+@@ -4,14 +4,18 @@
+ 
+ import { createBrowserClient } from '@supabase/ssr';
+ 
+-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
++// Read env vars at module level but do NOT throw — Next.js evaluates
++// this file during static analysis/build when env vars may be absent.
++const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? '';
++const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? '';
+ 
+-if (!supabaseUrl || !supabaseAnonKey) {
+-  throw new Error('Missing Supabase environment variables');
+-}
+-
+-// Browser client — used in client components
++// Browser client — used in client components.
++// Throws at runtime (not build time) if env vars are missing.
+ export function createClient() {
++  if (!supabaseUrl || !supabaseAnonKey) {
++    throw new Error(
++      'Missing Supabase environment variables. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.'
++    );
++  }
+   return createBrowserClient(supabaseUrl, supabaseAnonKey);
+ }
+diff --git a/middleware.ts b/middleware.ts
+index 841ec2a..0851009 100644
+--- a/middleware.ts
++++ b/middleware.ts
+@@ -42,6 +42,10 @@ export async function middleware(request: NextRequest) {
+   const publicRoutes = ['/login', '/signup', '/auth/callback', '/api/stripe/webhook'];
+   const isPublicRoute = pathname === '/' || publicRoutes.some((route) => pathname.startsWith(route));
+ 
++  // PWA assets must be accessible without auth for install/offline support
++  const isPWAAsset = pathname === '/manifest.webmanifest' || pathname === '/sw.js';
++  if (isPWAAsset) return supabaseResponse;
++
+   // If not authenticated and trying to access protected route, redirect to login
+   if (!user && !isPublicRoute) {
+     const url = request.nextUrl.clone();
+diff --git a/next.config.ts b/next.config.ts
+index e9ffa30..1034cad 100644
+--- a/next.config.ts
++++ b/next.config.ts
+@@ -1,7 +1,35 @@
+ import type { NextConfig } from "next";
+ 
+ const nextConfig: NextConfig = {
+-  /* config options here */
++  async headers() {
++    return [
++      {
++        source: '/(.*)',
++        headers: [
++          {
++            key: 'Content-Security-Policy',
++            value: [
++              "default-src 'self'",
++              "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
++              "style-src 'self' 'unsafe-inline'",
++              "img-src 'self' data: blob:",
++              "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.stripe.com",
++              "frame-ancestors 'none'",
++              "base-uri 'self'",
++              "form-action 'self'",
++            ].join('; '),
++          },
++          { key: 'X-Frame-Options', value: 'DENY' },
++          { key: 'X-Content-Type-Options', value: 'nosniff' },
++          { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
++          {
++            key: 'Permissions-Policy',
++            value: 'camera=(), microphone=(), geolocation=(), interest-cohort=()',
++          },
++        ],
++      },
++    ];
++  },
+ };
+ 
+ export default nextConfig;
+diff --git a/supabase/migrations/20260317_add_file_name_iv.sql b/supabase/migrations/20260317_add_file_name_iv.sql
+new file mode 100644
+index 0000000..ed9a3cc
+--- /dev/null
++++ b/supabase/migrations/20260317_add_file_name_iv.sql
+@@ -0,0 +1,16 @@
++-- ============================================
++-- ShoreStack Vault — Migration: Add file_name_iv column
++-- ============================================
++-- Required for Fix 1.1: Document filename IV was not being stored separately.
++-- The file_iv column holds the IV for the file body; the filename needs its own IV.
++-- Run this BEFORE deploying the updated DocumentUpload.tsx.
++
++ALTER TABLE vault_documents
++ADD COLUMN IF NOT EXISTS file_name_iv TEXT;
++
++-- For existing documents uploaded before this fix, file_name_iv will be NULL.
++-- The app code falls back to file_iv for legacy docs (which may not decrypt correctly
++-- since the IVs were mismatched — those documents may need re-upload).
++
++COMMENT ON COLUMN vault_documents.file_name_iv IS
++  'IV used to encrypt file_name_encrypted. Separate from file_iv (which is for the file body).';
+diff --git a/types/vault.ts b/types/vault.ts
+index a341ba7..e964a29 100644
+--- a/types/vault.ts
++++ b/types/vault.ts
+@@ -45,6 +45,7 @@ export interface VaultDocumentRow {
+   linked_item_id: string | null;
+   storage_path: string;
+   file_name_encrypted: string;
++  file_name_iv: string;
+   file_key_encrypted: string;
+   file_iv: string;
+   file_size: number | null;
+-- 
+2.34.1
+

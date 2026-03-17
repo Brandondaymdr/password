@@ -48,7 +48,9 @@ export default function DocumentsPage() {
     const decrypted: DecryptedDocument[] = [];
     for (const row of rows as VaultDocumentRow[]) {
       try {
-        const fileName = await decryptFilename(row.file_name_encrypted, row.file_iv, vaultKey);
+        // Use the dedicated filename IV if available, fall back to file_iv for legacy docs
+        const filenameIv = row.file_name_iv || row.file_iv;
+        const fileName = await decryptFilename(row.file_name_encrypted, filenameIv, vaultKey);
         decrypted.push({
           id: row.id,
           fileName,

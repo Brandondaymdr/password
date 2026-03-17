@@ -45,6 +45,7 @@ export interface VaultDocumentRow {
   linked_item_id: string | null;
   storage_path: string;
   file_name_encrypted: string;
+  file_name_iv: string;
   file_key_encrypted: string;
   file_iv: string;
   file_size: number | null;

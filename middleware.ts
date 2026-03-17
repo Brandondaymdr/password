@@ -42,6 +42,10 @@ export async function middleware(request: NextRequest) {
   const publicRoutes = ['/login', '/signup', '/auth/callback', '/api/stripe/webhook'];
   const isPublicRoute = pathname === '/' || publicRoutes.some((route) => pathname.startsWith(route));
 
+  // PWA assets must be accessible without auth for install/offline support
+  const isPWAAsset = pathname === '/manifest.webmanifest' || pathname === '/sw.js';
+  if (isPWAAsset) return supabaseResponse;
+
   // If not authenticated and trying to access protected route, redirect to login
   if (!user && !isPublicRoute) {
     const url = request.nextUrl.clone();

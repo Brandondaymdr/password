@@ -109,7 +109,10 @@ export type ExtensionMessageType =
   | 'FORM_DETECTED'
   | 'SAVE_OFFER'
   | 'SAVE_CREDENTIAL'
-  | 'GENERATE_PASSWORD';
+  | 'GENERATE_PASSWORD'
+  | 'GET_PENDING_SAVE'
+  | 'CONFIRM_SAVE'
+  | 'DISMISS_SAVE';
 
 export interface ExtensionMessage {
   type: ExtensionMessageType;

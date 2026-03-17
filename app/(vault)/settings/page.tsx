@@ -2,12 +2,11 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { createClient } from '@/lib/supabase';
-import { deriveVaultKey, encryptItem, decryptItem, createVaultVerifier } from '@/lib/crypto';
+import { deriveVaultKey, encryptItem, decryptItem, createVaultVerifier, generateSearchIndex, generateSalt, encryptFilename, decryptFilename } from '@/lib/crypto';
 import { VaultSession } from '@/lib/vault-session';
 import { useRouter, useSearchParams } from 'next/navigation';
 import PricingCards from '@/components/vault/PricingCards';
-import BiometricEnroll from '@/components/vault/BiometricEnroll';
-import type { Profile, VaultItemRow, AuditLogRow } from '@/types/vault';
+import type { Profile, VaultItemRow, VaultDocumentRow, AuditLogRow, DecryptedItemData } from '@/types/vault';
 
 export default function SettingsPage() {
   return (
@@ -87,17 +86,26 @@ function SettingsContent() {
       // Verify current password by deriving key
       const oldKey = await deriveVaultKey(currentPw, profile.kdf_salt, profile.kdf_iterations);
 
-      // Derive new key with same salt (or generate new salt for better security)
-      const newKey = await deriveVaultKey(newPw, profile.kdf_salt, profile.kdf_iterations);
+      // Generate a fresh KDF salt for the new password (best practice)
+      const newSalt = generateSalt();
+      const newKey = await deriveVaultKey(newPw, newSalt, profile.kdf_iterations);
 
-      // Re-encrypt all vault items with the new key
+      // --- Re-encrypt all vault items ---
       const { data: rows } = await supabase.from('vault_items').select('*');
       if (rows) {
         for (const row of rows as VaultItemRow[]) {
           try {
             const decrypted = await decryptItem(row.encrypted_data, row.iv, oldKey);
             const { encrypted, iv } = await encryptItem(decrypted, newKey);
-            await supabase.from('vault_items').update({ encrypted_data: encrypted, iv }).eq('id', row.id);
+            // Regenerate search index with new key (HMAC is key-dependent)
+            const itemData = decrypted as DecryptedItemData;
+            const name = 'name' in itemData ? (itemData as { name: string }).name : '';
+            const searchIndex = name ? await generateSearchIndex(name, newKey) : row.search_index;
+            await supabase.from('vault_items').update({
+              encrypted_data: encrypted,
+              iv,
+              search_index: searchIndex,
+            }).eq('id', row.id);
           } catch {
             setChangePwError('Failed to decrypt an item with the current password. Aborting.');
             setChangePwLoading(false);
@@ -106,13 +114,68 @@ function SettingsContent() {
         }
       }
 
-      // Re-create vault verifier with the new key
+      // --- Re-encrypt all vault documents (filenames + file keys) ---
+      const { data: docRows } = await supabase.from('vault_documents').select('*');
+      if (docRows) {
+        for (const doc of docRows as VaultDocumentRow[]) {
+          try {
+            // Decrypt filename with old key
+            const filenameIv = doc.file_name_iv || doc.file_iv;
+            const filename = await decryptFilename(doc.file_name_encrypted, filenameIv, oldKey);
+            // Re-encrypt filename with new key
+            const newEncryptedName = await encryptFilename(filename, newKey);
+
+            // Decrypt file key with old vault key, re-encrypt with new vault key
+            // file_key_encrypted contains: keyIv (12 bytes) + encrypted AES key
+            const combinedKeyData = new Uint8Array(Uint8Array.from(atob(doc.file_key_encrypted), c => c.charCodeAt(0)).buffer);
+            const keyIv = combinedKeyData.slice(0, 12);
+            const encryptedFileKey = combinedKeyData.slice(12);
+            const rawFileKey = await crypto.subtle.decrypt(
+              { name: 'AES-GCM', iv: keyIv },
+              oldKey,
+              encryptedFileKey
+            );
+            const newKeyIv = crypto.getRandomValues(new Uint8Array(12));
+            const newEncryptedFileKey = await crypto.subtle.encrypt(
+              { name: 'AES-GCM', iv: newKeyIv },
+              newKey,
+              rawFileKey
+            );
+            const newCombined = new Uint8Array(newKeyIv.length + new Uint8Array(newEncryptedFileKey).length);
+            newCombined.set(newKeyIv);
+            newCombined.set(new Uint8Array(newEncryptedFileKey), newKeyIv.length);
+            const newFileKeyEncrypted = btoa(String.fromCharCode(...newCombined));
+
+            await supabase.from('vault_documents').update({
+              file_name_encrypted: newEncryptedName.encrypted,
+              file_name_iv: newEncryptedName.iv,
+              file_key_encrypted: newFileKeyEncrypted,
+            }).eq('id', doc.id);
+          } catch {
+            setChangePwError('Failed to re-encrypt a document. Aborting.');
+            setChangePwLoading(false);
+            return;
+          }
+        }
+      }
+
+      // --- Re-create vault verifier with the new key ---
       const { encrypted: newVerifier, iv: newVerifierIv } = await createVaultVerifier(newKey);
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
         await supabase
           .from('profiles')
-          .update({ vault_verifier: newVerifier, vault_verifier_iv: newVerifierIv })
+          .update({
+            kdf_salt: newSalt,
+            vault_verifier: newVerifier,
+            vault_verifier_iv: newVerifierIv,
+            // Clear biometric wrapping — user must re-enroll after password change
+            biometric_vault_key_encrypted: null,
+            biometric_vault_key_iv: null,
+            webauthn_credential_id: null,
+            webauthn_public_key: null,
+            webauthn_transports: null,
+          })
           .eq('id', user.id);
       }
 
@@ -126,7 +189,7 @@ function SettingsContent() {
       setCurrentPw('');
       setNewPw('');
       setConfirmNewPw('');
-      alert('Master password changed successfully.');
+      alert('Master password changed successfully. All items and documents have been re-encrypted.');
     } catch {
       setChangePwError('Current master password is incorrect.');
     } finally {
@@ -169,20 +232,23 @@ function SettingsContent() {
   async function handleDeleteAccount() {
     if (deleteConfirm !== 'DELETE') return;
 
-    VaultSession.lock();
-    // Delete all user data (cascade will handle vault_items, documents, audit)
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user) {
-      // Delete storage files
-      const { data: docs } = await supabase.from('vault_documents').select('storage_path');
-      if (docs && docs.length > 0) {
-        await supabase.storage.from('vault-documents').remove(docs.map(d => d.storage_path));
-      }
-      // Note: Supabase cascade will delete profiles, vault_items, etc.
-    }
+    try {
+      // Call the server-side deletion endpoint that actually deletes everything
+      const res = await fetch('/api/account/delete', { method: 'POST' });
+      const data = await res.json();
 
-    await supabase.auth.signOut();
-    router.push('/login');
+      if (!res.ok) {
+        alert(data.error || 'Failed to delete account. Please try again or contact support.');
+        return;
+      }
+
+      // Clear local state and sign out
+      VaultSession.lock();
+      await supabase.auth.signOut();
+      router.push('/login');
+    } catch {
+      alert('Account deletion failed. Please try again.');
+    }
   }
 
   async function handleManageBilling() {
@@ -272,8 +338,8 @@ function SettingsContent() {
           )}
         </section>
 
-        {/* Biometric Unlock */}
-        {profile && <BiometricEnroll profile={profile} />}
+        {/* Biometric Unlock — disabled until server-side WebAuthn is implemented */}
+        {/* TODO: Re-enable once WebAuthn ceremony is verified server-side (see SHORESTACK-VAULT-FIX-PLAN.md) */}
 
         {/* Export */}
         <section className="rounded-sm border border-[#1b4965]/15 bg-white p-6">

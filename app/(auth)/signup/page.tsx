@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { createClient } from '@/lib/supabase';
+import { normalizeAuthError } from '@/lib/auth-errors';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import ShorestackLogo from '@/components/ui/ShorestackLogo';
@@ -41,7 +42,7 @@ export default function SignupPage() {
       });
 
       if (authError) {
-        setError(authError.message);
+        setError(normalizeAuthError(authError.message));
         return;
       }
 

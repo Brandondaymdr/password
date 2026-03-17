@@ -58,6 +58,25 @@ async function handleMessage(message: ExtensionMessage): Promise<unknown> {
     case 'FORM_DETECTED':
       return handleFormDetected(message.payload as { url: string; fieldCount: number });
 
+    case 'SAVE_OFFER':
+      return handleSaveOffer(
+        message.payload as { url: string; username: string; password: string }
+      );
+
+    case 'GET_PENDING_SAVE':
+      return { pending: pendingSaveOffer };
+
+    case 'CONFIRM_SAVE': {
+      if (!pendingSaveOffer) return { error: 'No pending credential' };
+      const result = await handleSaveCredential(pendingSaveOffer);
+      clearPendingSaveOffer();
+      return result;
+    }
+
+    case 'DISMISS_SAVE':
+      clearPendingSaveOffer();
+      return { success: true };
+
     default:
       return { error: `Unknown message type: ${message.type}` };
   }
@@ -317,6 +336,44 @@ async function handleFormDetected(payload: { url: string; fieldCount: number }) 
   }
 
   return { matchCount };
+}
+
+// --- Save Offer (credential capture from form submission) ---
+
+// Pending credentials waiting for user confirmation via the popup
+let pendingSaveOffer: { url: string; username: string; password: string } | null = null;
+
+async function handleSaveOffer(payload: { url: string; username: string; password: string }) {
+  if (!isUnlocked()) return { saved: false, reason: 'locked' };
+
+  // Check if we already have this credential saved
+  const existing = await handleGetCredentials({ url: payload.url });
+  if (!('error' in existing)) {
+    const isDuplicate = existing.items.some((item) => {
+      const data = item.data as { username?: string; password?: string };
+      return data.username === payload.username && data.password === payload.password;
+    });
+    if (isDuplicate) return { saved: false, reason: 'duplicate' };
+  }
+
+  // Store as pending — user confirms via popup
+  pendingSaveOffer = payload;
+
+  // Show badge to prompt user to open popup
+  chrome.action.setBadgeText({ text: '+' });
+  chrome.action.setBadgeBackgroundColor({ color: '#d97706' });
+
+  return { saved: false, reason: 'pending', pending: true };
+}
+
+// Expose pending offer for the popup to query
+export function getPendingSaveOffer() {
+  return pendingSaveOffer;
+}
+
+export function clearPendingSaveOffer() {
+  pendingSaveOffer = null;
+  chrome.action.setBadgeText({ text: '' });
 }
 
 // --- Service Worker Lifecycle ---

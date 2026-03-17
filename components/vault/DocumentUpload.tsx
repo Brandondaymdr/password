@@ -63,6 +63,7 @@ export default function DocumentUpload({ linkedItemId, onUploaded }: DocumentUpl
           linked_item_id: linkedItemId || null,
           storage_path: storagePath,
           file_name_encrypted: encryptedName.encrypted,
+          file_name_iv: encryptedName.iv,
           file_key_encrypted: fileKeyEncrypted,
           file_iv: iv,
           file_size: file.size,
