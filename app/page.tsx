@@ -123,11 +123,7 @@ export default function LandingPage() {
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-[#5fa8a0]">✓</span>
-                  <span>Shared vaults</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-[#5fa8a0]">✓</span>
-                  <span>Perfect for families & teams</span>
+                  <span>Priority support</span>
                 </li>
               </ul>
               <Link href="/signup" className="block w-full rounded-sm border border-[#1b4965]/15 px-4 py-3 text-center font-medium text-[#1b4965] transition-colors hover:bg-[#1b4965]/5">

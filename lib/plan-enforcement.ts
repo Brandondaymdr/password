@@ -26,13 +26,6 @@ export function checkStorageLimit(plan: PlanType, currentMB: number, newFileMB: 
   return { allowed: true, limit: limitMB, current: currentMB };
 }
 
-export function checkSharedVaultAccess(plan: PlanType): PlanCheckResult {
-  if (!PLAN_LIMITS[plan].sharedVaults) {
-    return { allowed: false, reason: 'Shared vaults require a Plus plan.' };
-  }
-  return { allowed: true };
-}
-
 export function checkAuditAccess(plan: PlanType): PlanCheckResult {
   if (!PLAN_LIMITS[plan].auditLog) {
     return { allowed: false, reason: 'Audit log requires a paid plan.' };

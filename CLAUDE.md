@@ -257,12 +257,38 @@ shorestack-vault/
 
 ## Pricing & Plans
 
-| Plan | Price | Items | Storage | Audit | Shared Vaults |
-|---|---|---|---|---|---|
-| Personal | $0.99/mo | Unlimited | 1 GB | Yes | No |
-| Plus | $1.99/mo | Unlimited | 10 GB | Yes | Yes |
+| Plan | Price | Items | Storage | Audit |
+|---|---|---|---|---|
+| Personal | $0.99/mo | Unlimited | 1 GB | Yes |
+| Plus | $1.99/mo | Unlimited | 10 GB | Yes |
 
-There is **no free tier**. All new signups default to the Personal plan. Storage-based pricing — any number of users per account.
+There is **no free tier**. All new signups default to the Personal plan. Storage-based pricing — tiers determined by storage usage.
+
+**Current state (beta):** 1 user = 1 account. Multi-user accounts are not yet built.
+
+### Multi-User Accounts (POST-BETA ROADMAP)
+
+The Shorestack model is **storage-based, not per-user.** Each account can have up to 5 users sharing a storage pool. What triggers an upgrade is storage usage, not user count.
+
+**Planned architecture:**
+- `accounts` table — owner, plan, stripe_customer_id, storage pool
+- `account_members` table — user_id, account_id, role (owner/member), invited_at
+- Account owner invites members by email (up to 5 per account)
+- Each member has their own master password (zero-knowledge requirement)
+- Shared vaults use RSA keypairs: shared symmetric key encrypted to each member's public key
+- All members' documents count toward the account's storage limit (1 GB or 10 GB)
+- Plan upgrade triggered when pooled storage exceeds the current tier's limit
+
+**What needs to be built:**
+1. Database: `accounts` and `account_members` tables with RLS
+2. Invitation flow: owner sends invite → member accepts → key exchange
+3. Shared vault crypto: RSA keypair per user, shared vault key wrapped to each member's public key
+4. Account-level storage tracking (sum all members' document sizes)
+5. Member management UI in settings (invite, remove, view members)
+6. Update Stripe to bill at the account level, not per-user
+7. Update plan enforcement to check account-level storage, not per-user
+
+**Do NOT launch shared vaults / multi-user until all 7 items above are complete.**
 
 ### Stripe Integration
 - **Checkout:** `/api/stripe/checkout` creates Checkout sessions, auto-creates Stripe customer

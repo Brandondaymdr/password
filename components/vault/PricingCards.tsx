@@ -34,9 +34,7 @@ const plans = [
     features: [
       'Everything in Personal',
       '10 GB document storage',
-      'Shared vaults',
       'Priority support',
-      'Perfect for families & teams',
     ],
     cta: 'Upgrade to Plus',
     priceKey: 'plus_monthly',

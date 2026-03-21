@@ -129,7 +129,7 @@ export interface PasswordOptions {
 
 // --- Plan Limits ---
 
-export const PLAN_LIMITS: Record<PlanType, { maxStorageMB: number; auditLog: boolean; sharedVaults: boolean }> = {
-  personal: { maxStorageMB: 1024, auditLog: true, sharedVaults: false },
-  plus: { maxStorageMB: 10240, auditLog: true, sharedVaults: true },
+export const PLAN_LIMITS: Record<PlanType, { maxStorageMB: number; auditLog: boolean }> = {
+  personal: { maxStorageMB: 1024, auditLog: true },
+  plus: { maxStorageMB: 10240, auditLog: true },
 };
