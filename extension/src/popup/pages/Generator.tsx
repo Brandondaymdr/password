@@ -32,9 +32,19 @@ export default function Generator({ onBack }: GeneratorProps) {
   });
 
   async function handleCopy() {
-    await navigator.clipboard.writeText(password);
+    const textToCopy = password;
+    await navigator.clipboard.writeText(textToCopy);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+    // Auto-clear clipboard after 30 seconds
+    setTimeout(async () => {
+      try {
+        const current = await navigator.clipboard.readText();
+        if (current === textToCopy) {
+          await navigator.clipboard.writeText('');
+        }
+      } catch { /* clipboard may not be accessible */ }
+    }, 30_000);
   }
 
   function getStrength(): { label: string; color: string; width: string } {

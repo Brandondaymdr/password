@@ -4,6 +4,9 @@ import { useState, useRef } from 'react';
 import { createClient } from '@/lib/supabase';
 import { encryptFile, encryptFilename } from '@/lib/crypto';
 import { VaultSession } from '@/lib/vault-session';
+import { logAuditEvent } from '@/lib/audit';
+import { checkStorageLimit } from '@/lib/plan-enforcement';
+import type { PlanType } from '@/types/vault';
 
 interface DocumentUploadProps {
   linkedItemId?: string | null;
@@ -33,6 +36,20 @@ export default function DocumentUpload({ linkedItemId, onUploaded }: DocumentUpl
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
+
+      // Check plan storage limits before upload
+      const { data: profile } = await supabase.from('profiles').select('plan').eq('id', user.id).single();
+      const { data: existingDocs } = await supabase.from('vault_documents').select('file_size').eq('user_id', user.id);
+      const currentUsageMB = (existingDocs?.reduce((sum, d) => sum + (d.file_size || 0), 0) || 0) / (1024 * 1024);
+      const totalNewFilesMB = Array.from(files).reduce((sum, f) => sum + f.size, 0) / (1024 * 1024);
+      const plan: PlanType = (profile?.plan as PlanType) || 'personal';
+
+      const limitCheck = checkStorageLimit(plan, currentUsageMB, totalNewFilesMB);
+      if (!limitCheck.allowed) {
+        setError(limitCheck.reason || 'Storage limit exceeded. Upgrade your plan for more storage.');
+        setUploading(false);
+        return;
+      }
 
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
@@ -72,10 +89,7 @@ export default function DocumentUpload({ linkedItemId, onUploaded }: DocumentUpl
         if (dbError) throw dbError;
 
         // Audit log
-        await supabase.from('vault_audit_log').insert({
-          user_id: user.id,
-          action: 'create',
-        });
+        await logAuditEvent('create');
       }
 
       setProgress('');

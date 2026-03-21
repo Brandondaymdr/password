@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase';
 import { isBiometricAvailable, registerBiometric } from '@/lib/webauthn';
 import { wrapVaultKeyForBiometric } from '@/lib/biometric-key';
+import { logAuditEvent } from '@/lib/audit';
 import type { Profile } from '@/types/vault';
 
 interface BiometricEnrollProps {
@@ -59,10 +60,7 @@ export default function BiometricEnroll({ profile }: BiometricEnrollProps) {
       if (updateError) throw updateError;
 
       // Step 4: Log audit event
-      await supabase.from('vault_audit_log').insert({
-        user_id: user.id,
-        action: 'biometric_enrolled',
-      });
+      await logAuditEvent('biometric_enrolled');
 
       setEnrolled(true);
       setSuccess(true);
@@ -97,10 +95,7 @@ export default function BiometricEnroll({ profile }: BiometricEnrollProps) {
 
       if (updateError) throw updateError;
 
-      await supabase.from('vault_audit_log').insert({
-        user_id: user.id,
-        action: 'biometric_removed',
-      });
+      await logAuditEvent('biometric_removed');
 
       setEnrolled(false);
     } catch (err) {

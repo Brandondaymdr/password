@@ -36,7 +36,13 @@ observeForForms(() => {
 
 // --- Message Handler ---
 
-chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  // Only accept messages from our own extension
+  if (sender.id !== chrome.runtime.id) {
+    sendResponse({ error: 'Unauthorized' });
+    return;
+  }
+
   switch (message.type) {
     case 'AUTOFILL': {
       const { username, password } = message.payload as {

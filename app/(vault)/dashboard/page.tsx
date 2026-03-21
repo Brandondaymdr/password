@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { createClient } from '@/lib/supabase';
 import { deriveVaultKey, decryptItem, verifyVaultKey } from '@/lib/crypto';
 import { VaultSession } from '@/lib/vault-session';
+import { logAuditEvent } from '@/lib/audit';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import AddItemModal from '@/components/vault/AddItemModal';
@@ -38,6 +39,9 @@ export default function DashboardPage() {
   const [masterPassword, setMasterPassword] = useState('');
   const [unlocking, setUnlocking] = useState(false);
   const [error, setError] = useState('');
+  const [failedAttempts, setFailedAttempts] = useState(0);
+  const [lockoutUntil, setLockoutUntil] = useState(0);
+  const [decryptionFailures, setDecryptionFailures] = useState(0);
 
   // UI state
   const [search, setSearch] = useState('');
@@ -112,17 +116,24 @@ export default function DashboardPage() {
     if (!rows) return;
 
     const decrypted: DecryptedVaultItem[] = [];
+    let failedCount = 0;
     for (const row of rows as VaultItemRow[]) {
       try {
         const data = await decryptItem(row.encrypted_data, row.iv, vaultKey) as DecryptedItemData;
         decrypted.push({ id: row.id, item_type: row.item_type, data, favorite: row.favorite, created_at: row.created_at, updated_at: row.updated_at });
-      } catch { /* skip corrupted items */ }
+      } catch { failedCount++; }
     }
+    setDecryptionFailures(failedCount);
     setItems(decrypted);
   }
 
   async function handleUnlock(e: React.FormEvent) {
     e.preventDefault();
+    if (Date.now() < lockoutUntil) {
+      const remaining = Math.ceil((lockoutUntil - Date.now()) / 1000);
+      setError(`Too many failed attempts. Try again in ${remaining} seconds.`);
+      return;
+    }
     setError('');
     setUnlocking(true);
     try {
@@ -133,22 +144,38 @@ export default function DashboardPage() {
       if (profile.vault_verifier && profile.vault_verifier_iv) {
         const isValid = await verifyVaultKey(profile.vault_verifier, profile.vault_verifier_iv, vaultKey);
         if (!isValid) {
-          setError('Incorrect master password. Please try again.');
+          const newAttempts = failedAttempts + 1;
+          setFailedAttempts(newAttempts);
+          if (newAttempts >= 5) {
+            setLockoutUntil(Date.now() + 60000); // 1 minute lockout
+            setFailedAttempts(0);
+            setError('Too many failed attempts. Please wait 1 minute before trying again.');
+          } else {
+            setError(`Incorrect master password. ${5 - newAttempts} attempts remaining.`);
+          }
           return;
         }
       }
 
       VaultSession.set(vaultKey);
+      setFailedAttempts(0);
 
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) await supabase.from('vault_audit_log').insert({ user_id: user.id, action: 'unlock' });
+      await logAuditEvent('unlock');
 
       setNeedsMasterPassword(false);
       setMasterPassword('');
       await loadItems();
       setLoading(false);
     } catch {
-      setError('Failed to unlock vault. Check your master password.');
+      const newAttempts = failedAttempts + 1;
+      setFailedAttempts(newAttempts);
+      if (newAttempts >= 5) {
+        setLockoutUntil(Date.now() + 60000); // 1 minute lockout
+        setFailedAttempts(0);
+        setError('Too many failed attempts. Please wait 1 minute before trying again.');
+      } else {
+        setError(`Incorrect master password. ${5 - newAttempts} attempts remaining.`);
+      }
     } finally {
       setUnlocking(false);
     }
@@ -168,9 +195,8 @@ export default function DashboardPage() {
   }
 
   async function handleDeleteItem(id: string) {
-    const { data: { user } } = await supabase.auth.getUser();
     await supabase.from('vault_items').delete().eq('id', id);
-    if (user) await supabase.from('vault_audit_log').insert({ user_id: user.id, action: 'delete', item_id: id });
+    await logAuditEvent('delete', id);
     setSelectedItem(null);
     await loadItems();
   }
@@ -354,6 +380,13 @@ export default function DashboardPage() {
         {/* PWA Install Prompt */}
         <PWAInstallPrompt />
 
+        {/* Decryption failure warning */}
+        {decryptionFailures > 0 && (
+          <div className="mx-4 mt-2 rounded-sm border border-[#d97706]/30 bg-[#d97706]/10 px-4 py-3 text-sm text-[#d97706]">
+            {decryptionFailures} item{decryptionFailures > 1 ? 's' : ''} could not be decrypted and {decryptionFailures > 1 ? 'are' : 'is'} not shown. This may indicate data corruption.
+          </div>
+        )}
+
         {/* Items */}
         <div className="p-6">
           {filteredItems.length === 0 ? (
@@ -417,6 +450,7 @@ export default function DashboardPage() {
 
       {/* Add/Edit Modal */}
       <AddItemModal
+        key={editItem?.id || 'new'}
         isOpen={showAddModal}
         onClose={() => { setShowAddModal(false); setEditItem(null); }}
         onSaved={loadItems}

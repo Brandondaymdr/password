@@ -109,6 +109,11 @@ export async function decryptItem(
 
 // --- HMAC Search Index ---
 
+/**
+ * Derive HMAC key material using AES-GCM as a PRF.
+ * Deterministic IV is intentional — the vault key is non-extractable so we cannot
+ * use HKDF. A single fixed (key, IV, plaintext) triple is safe: no IV reuse risk.
+ */
 export async function generateSearchIndex(
   name: string,
   vaultKey: CryptoKey
@@ -162,6 +167,10 @@ const CHAR_SETS = {
 
 const AMBIGUOUS_CHARS = 'Il1O0';
 
+/**
+ * Generate a cryptographically strong random password.
+ * Uses rejection sampling to eliminate modulo bias (audit item M2).
+ */
 export function generatePassword(
   length: number = 20,
   options: Partial<PasswordOptions> = {}
@@ -193,12 +202,19 @@ export function generatePassword(
     throw new Error('At least one character set must be enabled');
   }
 
-  const randomValues = new Uint32Array(opts.length);
-  crypto.getRandomValues(randomValues);
+  // Rejection sampling: discard random bytes that would introduce modulo bias.
+  // For a charset of length n, values >= (256 - (256 % n)) are biased.
+  const limit = 256 - (256 % charset.length);
 
   let password = '';
-  for (let i = 0; i < opts.length; i++) {
-    password += charset[randomValues[i] % charset.length];
+  for (let i = 0; i < opts.length; ) {
+    const byte = new Uint8Array(1);
+    crypto.getRandomValues(byte);
+    if (byte[0] < limit) {
+      password += charset[byte[0] % charset.length];
+      i++;
+    }
+    // else: byte is in the biased range — discard and retry
   }
 
   return password;

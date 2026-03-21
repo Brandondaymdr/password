@@ -5,6 +5,7 @@
 // Uses the Supabase service role to delete the auth user.
 
 import { createServerSupabaseClient, createAdminClient } from '@/lib/supabase-server';
+import { getStripe } from '@/lib/stripe';
 import { NextResponse } from 'next/server';
 
 export async function POST() {
@@ -22,6 +23,24 @@ export async function POST() {
     // Use admin client (service role) to perform deletions
     const admin = createAdminClient();
 
+    // Cancel any active Stripe subscriptions before deleting data
+    const { data: profile } = await admin.from('profiles').select('stripe_customer_id').eq('id', userId).single();
+    if (profile?.stripe_customer_id) {
+      try {
+        const subscriptions = await getStripe().subscriptions.list({
+          customer: profile.stripe_customer_id,
+          status: 'active',
+        });
+        for (const sub of subscriptions.data) {
+          await getStripe().subscriptions.cancel(sub.id);
+        }
+      } catch (stripeErr) {
+        console.error('Failed to cancel Stripe subscriptions:', stripeErr);
+        // Continue with deletion even if Stripe cancellation fails
+        // The subscription will expire naturally without a valid customer
+      }
+    }
+
     // 1. Delete storage objects (vault-documents bucket)
     const { data: docs } = await admin
       .from('vault_documents')
@@ -35,16 +54,20 @@ export async function POST() {
     }
 
     // 2. Delete vault_documents rows
-    await admin.from('vault_documents').delete().eq('user_id', userId);
+    const { error: docsError } = await admin.from('vault_documents').delete().eq('user_id', userId);
+    if (docsError) console.error('Failed to delete vault_documents:', docsError.message);
 
     // 3. Delete vault_items rows
-    await admin.from('vault_items').delete().eq('user_id', userId);
+    const { error: itemsError } = await admin.from('vault_items').delete().eq('user_id', userId);
+    if (itemsError) console.error('Failed to delete vault_items:', itemsError.message);
 
     // 4. Delete vault_audit_log rows
-    await admin.from('vault_audit_log').delete().eq('user_id', userId);
+    const { error: auditError } = await admin.from('vault_audit_log').delete().eq('user_id', userId);
+    if (auditError) console.error('Failed to delete vault_audit_log:', auditError.message);
 
     // 5. Delete profiles row
-    await admin.from('profiles').delete().eq('id', userId);
+    const { error: profilesError } = await admin.from('profiles').delete().eq('id', userId);
+    if (profilesError) console.error('Failed to delete profiles:', profilesError.message);
 
     // 6. Delete the auth user itself
     const { error: deleteUserError } = await admin.auth.admin.deleteUser(userId);

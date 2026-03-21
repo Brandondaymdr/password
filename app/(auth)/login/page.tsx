@@ -11,6 +11,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [magicLinkSent, setMagicLinkSent] = useState(false);
   const [loading, setLoading] = useState(false);
   const router = useRouter();
   const supabase = createClient();
@@ -43,6 +44,7 @@ export default function LoginPage() {
 
   async function handleMagicLink() {
     setError('');
+    setMagicLinkSent(false);
     if (!email) {
       setError('Enter your email first');
       return;
@@ -61,7 +63,7 @@ export default function LoginPage() {
       }
 
       setError('');
-      alert('Check your email for a magic login link!');
+      setMagicLinkSent(true);
     } catch {
       setError('An unexpected error occurred');
     } finally {
@@ -82,6 +84,11 @@ export default function LoginPage() {
 
         {/* Form */}
         <form onSubmit={handleLogin} className="space-y-4">
+          {magicLinkSent && (
+            <div className="rounded-sm border border-[#5fa8a0]/30 bg-[#5fa8a0]/10 px-4 py-3 text-sm text-[#5fa8a0]">
+              Check your email for a magic login link!
+            </div>
+          )}
           {error && (
             <div className="rounded-sm border border-[#e76f51]/30 bg-[#e76f51]/10 px-4 py-3 text-sm text-[#e76f51]">
               {error}

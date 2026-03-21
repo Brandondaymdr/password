@@ -1,9 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { createClient } from '@/lib/supabase';
 import { encryptItem, generateSearchIndex } from '@/lib/crypto';
 import { VaultSession } from '@/lib/vault-session';
+import { logAuditEvent } from '@/lib/audit';
 import PasswordGenerator from './PasswordGenerator';
 import type {
   VaultItemType,
@@ -143,11 +144,7 @@ export default function AddItemModal({ isOpen, onClose, onSaved, editItem }: Add
         if (updateError) throw updateError;
 
         // Audit log
-        await supabase.from('vault_audit_log').insert({
-          user_id: user.id,
-          action: 'edit',
-          item_id: editItem.id,
-        });
+        await logAuditEvent('edit', editItem.id);
       } else {
         // Create new item
         const { data: newItem, error: insertError } = await supabase
@@ -166,11 +163,7 @@ export default function AddItemModal({ isOpen, onClose, onSaved, editItem }: Add
         if (insertError) throw insertError;
 
         // Audit log
-        await supabase.from('vault_audit_log').insert({
-          user_id: user.id,
-          action: 'create',
-          item_id: newItem?.id,
-        });
+        await logAuditEvent('create', newItem?.id);
       }
 
       onSaved();
@@ -182,14 +175,24 @@ export default function AddItemModal({ isOpen, onClose, onSaved, editItem }: Add
     }
   }
 
+  const handleEscape = useCallback((e: KeyboardEvent) => {
+    if (e.key === 'Escape') onClose();
+  }, [onClose]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
+  }, [isOpen, handleEscape]);
+
   if (!isOpen) return null;
 
   const inputClass = 'block w-full rounded-sm border border-[#1b4965]/15 bg-white px-3 py-2.5 text-sm text-[#1b4965] placeholder-[#1b4965]/40 focus:border-[#5fa8a0] focus:outline-none focus:ring-1 focus:ring-[#5fa8a0]';
   const labelClass = 'block text-sm font-medium text-[#1b4965]/70 mb-1';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/30 p-4 pt-16 backdrop-blur-sm">
-      <div className="w-full max-w-lg rounded-sm border border-[#1b4965]/15 bg-[#fcfbf8] shadow-lg">
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/30 p-4 pt-16 backdrop-blur-sm" onClick={onClose}>
+      <div className="w-full max-w-lg rounded-sm border border-[#1b4965]/15 bg-[#fcfbf8] shadow-lg" onClick={(e) => e.stopPropagation()}>
         {/* Header */}
         <div className="flex items-center justify-between border-b border-[#1b4965]/15 px-6 py-4">
           <h2 className="text-lg font-semibold text-[#1b4965]">{isEditing ? 'Edit Item' : 'Add New Item'}</h2>

@@ -13,9 +13,14 @@ export async function POST(request: Request) {
     const body = await request.json();
     const { action, item_id } = body;
 
-    const validActions = ['unlock', 'view', 'create', 'edit', 'delete', 'export'];
-    if (!validActions.includes(action)) {
+    const validActions = ['unlock', 'view', 'create', 'edit', 'delete', 'export', 'biometric_enrolled', 'biometric_removed'];
+    if (!action || typeof action !== 'string' || !validActions.includes(action)) {
       return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
+    }
+
+    // Validate item_id is a UUID if provided
+    if (item_id && (typeof item_id !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(item_id))) {
+      return NextResponse.json({ error: 'Invalid item_id' }, { status: 400 });
     }
 
     // Get IP and user agent from request headers
@@ -31,7 +36,8 @@ export async function POST(request: Request) {
     });
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      console.error('[Audit] Insert failed:', error.message);
+      return NextResponse.json({ error: 'Failed to log audit event' }, { status: 500 });
     }
 
     return NextResponse.json({ success: true });
@@ -67,7 +73,8 @@ export async function GET() {
       .limit(200);
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      console.error('[Audit] Fetch failed:', error.message);
+      return NextResponse.json({ error: 'Failed to fetch audit logs' }, { status: 500 });
     }
 
     return NextResponse.json({ logs });

@@ -29,6 +29,15 @@ export default function ItemDetail({ itemId, onBack }: ItemDetailProps) {
     await navigator.clipboard.writeText(text);
     setCopiedField(fieldName);
     setTimeout(() => setCopiedField(null), 2000);
+    // Auto-clear clipboard after 30 seconds
+    setTimeout(async () => {
+      try {
+        const current = await navigator.clipboard.readText();
+        if (current === text) {
+          await navigator.clipboard.writeText('');
+        }
+      } catch { /* clipboard may not be accessible */ }
+    }, 30_000);
   }
 
   function handleAutofill() {

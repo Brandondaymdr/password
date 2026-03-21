@@ -8,9 +8,10 @@ const CACHE_NAME = 'shorestack-vault-v1';
 const STATIC_CACHE = 'shorestack-static-v1';
 
 // App shell files to pre-cache on install
+// NOTE: Only pre-cache publicly accessible routes. /dashboard requires auth
+// and would cache a redirect to /login, breaking offline.
 const APP_SHELL = [
   '/',
-  '/dashboard',
   '/login',
   '/manifest.webmanifest',
   '/icon-192.png',
@@ -56,10 +57,11 @@ self.addEventListener('fetch', (event) => {
   // Skip chrome-extension and non-http(s) URLs
   if (!url.protocol.startsWith('http')) return;
 
-  // Supabase API calls: Network-first with cache fallback
+  // Supabase API calls: Never cache in service worker.
+  // Caching Supabase responses stores kdf_salt, vault_verifier, and auth tokens
+  // in Cache Storage, which is accessible to any JS on the origin (XSS risk).
   if (url.hostname.includes('supabase.co')) {
-    event.respondWith(networkFirst(request));
-    return;
+    return; // Let the browser handle it normally — no caching
   }
 
   // Static assets (fonts, images): Cache-first
@@ -77,21 +79,6 @@ self.addEventListener('fetch', (event) => {
 });
 
 // --- Caching Strategies ---
-
-async function networkFirst(request) {
-  try {
-    const response = await fetch(request);
-    if (response.ok) {
-      const cache = await caches.open(CACHE_NAME);
-      cache.put(request, response.clone());
-    }
-    return response;
-  } catch {
-    const cached = await caches.match(request);
-    if (cached) return cached;
-    return new Response('Offline', { status: 503, statusText: 'Service Unavailable' });
-  }
-}
 
 async function cacheFirst(request, cacheName = CACHE_NAME) {
   const cached = await caches.match(request);

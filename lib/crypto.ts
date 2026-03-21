@@ -130,6 +130,14 @@ export async function decryptItem(
  * Generate an HMAC-SHA256 search index for an item name.
  * This allows searching vault items without exposing the name.
  * The server sees only the HMAC hash, never the plaintext name.
+ *
+ * Key derivation note: The vault key is non-extractable (AES-GCM), so we cannot
+ * use HKDF directly. Instead, we use AES-GCM as a PRF (pseudo-random function)
+ * to derive HMAC key material. This is safe because:
+ * 1. The plaintext is a fixed constant ("hmac-search-index-key") — never varies
+ * 2. A single (key, IV, plaintext) triple always produces identical ciphertext
+ * 3. No IV reuse vulnerability exists since only one message is ever encrypted
+ * 4. The output is used solely as keying material, not as a ciphertext
  */
 export async function generateSearchIndex(
   name: string,
@@ -138,10 +146,10 @@ export async function generateSearchIndex(
   const encoder = new TextEncoder();
   const nameBuffer = encoder.encode(name.toLowerCase().trim());
 
-  // Export the vault key raw bytes to use as HMAC key
-  // Since our vault key is non-extractable, we derive an HMAC key from it
+  // Derive HMAC key material using AES-GCM as a PRF.
+  // The deterministic IV is intentional — see function-level comment above.
   const hmacKeyMaterial = await crypto.subtle.encrypt(
-    { name: 'AES-GCM', iv: new Uint8Array(IV_LENGTH) }, // deterministic IV for HMAC derivation
+    { name: 'AES-GCM', iv: new Uint8Array(IV_LENGTH) },
     vaultKey,
     encoder.encode('hmac-search-index-key')
   );
@@ -171,6 +179,7 @@ const AMBIGUOUS_CHARS = 'Il1O0';
 
 /**
  * Generate a cryptographically strong random password.
+ * Uses rejection sampling to eliminate modulo bias (audit item M2).
  */
 export function generatePassword(
   length: number = 20,
@@ -203,13 +212,19 @@ export function generatePassword(
     throw new Error('At least one character set must be enabled');
   }
 
-  // Use crypto.getRandomValues for true randomness
-  const randomValues = new Uint32Array(opts.length);
-  crypto.getRandomValues(randomValues);
+  // Rejection sampling: discard random bytes that would introduce modulo bias.
+  // For a charset of length n, values >= (256 - (256 % n)) are biased.
+  const limit = 256 - (256 % charset.length);
 
   let password = '';
-  for (let i = 0; i < opts.length; i++) {
-    password += charset[randomValues[i] % charset.length];
+  for (let i = 0; i < opts.length; ) {
+    const byte = new Uint8Array(1);
+    crypto.getRandomValues(byte);
+    if (byte[0] < limit) {
+      password += charset[byte[0] % charset.length];
+      i++;
+    }
+    // else: byte is in the biased range — discard and retry
   }
 
   return password;

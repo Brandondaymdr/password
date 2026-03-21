@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase';
 import { decryptFilename, decryptFile } from '@/lib/crypto';
 import { VaultSession } from '@/lib/vault-session';
+import { logAuditEvent } from '@/lib/audit';
 import { useRouter } from 'next/navigation';
 import DocumentUpload from '@/components/vault/DocumentUpload';
 import type { VaultDocumentRow } from '@/types/vault';
@@ -22,6 +23,8 @@ export default function DocumentsPage() {
   const [documents, setDocuments] = useState<DecryptedDocument[]>([]);
   const [loading, setLoading] = useState(true);
   const [downloading, setDownloading] = useState<string | null>(null);
+  const [decryptionFailures, setDecryptionFailures] = useState(0);
+  const [error, setError] = useState('');
   const router = useRouter();
   const supabase = createClient();
 
@@ -46,6 +49,7 @@ export default function DocumentsPage() {
     if (!rows) { setLoading(false); return; }
 
     const decrypted: DecryptedDocument[] = [];
+    let failedCount = 0;
     for (const row of rows as VaultDocumentRow[]) {
       try {
         // Use the dedicated filename IV if available, fall back to file_iv for legacy docs
@@ -60,9 +64,10 @@ export default function DocumentsPage() {
           fileIv: row.file_iv,
           createdAt: row.created_at,
         });
-      } catch { /* skip corrupted */ }
+      } catch { failedCount++; }
     }
 
+    setDecryptionFailures(failedCount);
     setDocuments(decrypted);
     setLoading(false);
   }
@@ -72,13 +77,14 @@ export default function DocumentsPage() {
     if (!vaultKey) return;
 
     setDownloading(doc.id);
+    setError('');
     try {
       // Download encrypted blob from storage
-      const { data: blob, error } = await supabase.storage
+      const { data: blob, error: dlError } = await supabase.storage
         .from('vault-documents')
         .download(doc.storagePath);
 
-      if (error || !blob) throw error || new Error('Download failed');
+      if (dlError || !blob) throw dlError || new Error('Download failed');
 
       // Decrypt the file client-side
       const encryptedBuffer = await blob.arrayBuffer();
@@ -93,16 +99,9 @@ export default function DocumentsPage() {
       URL.revokeObjectURL(url);
 
       // Audit log
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        await supabase.from('vault_audit_log').insert({
-          user_id: user.id,
-          action: 'view',
-          item_id: doc.id,
-        });
-      }
+      await logAuditEvent('view', doc.id);
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Download failed');
+      setError(err instanceof Error ? err.message : 'Download failed');
     } finally {
       setDownloading(null);
     }
@@ -111,12 +110,9 @@ export default function DocumentsPage() {
   async function handleDelete(docId: string, storagePath: string) {
     if (!confirm('Delete this document? This cannot be undone.')) return;
 
-    const { data: { user } } = await supabase.auth.getUser();
     await supabase.storage.from('vault-documents').remove([storagePath]);
     await supabase.from('vault_documents').delete().eq('id', docId);
-    if (user) {
-      await supabase.from('vault_audit_log').insert({ user_id: user.id, action: 'delete', item_id: docId });
-    }
+    await logAuditEvent('delete', docId);
     await loadDocuments();
   }
 
@@ -148,6 +144,20 @@ export default function DocumentsPage() {
         <div className="mb-8">
           <DocumentUpload onUploaded={loadDocuments} />
         </div>
+
+        {/* Download error */}
+        {error && (
+          <div className="mb-4 rounded-sm border border-[#e76f51]/30 bg-[#e76f51]/10 px-4 py-3 text-sm text-[#e76f51]">
+            {error}
+          </div>
+        )}
+
+        {/* Decryption failure warning */}
+        {decryptionFailures > 0 && (
+          <div className="mb-4 rounded-sm border border-[#d97706]/30 bg-[#d97706]/10 px-4 py-3 text-sm text-[#d97706]">
+            {decryptionFailures} document{decryptionFailures > 1 ? 's' : ''} could not be decrypted and {decryptionFailures > 1 ? 'are' : 'is'} not shown. This may indicate data corruption.
+          </div>
+        )}
 
         {/* Document list */}
         {loading ? (

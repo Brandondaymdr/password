@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import type { DecryptedVaultItem, LoginItem, SecureNoteItem, CreditCardItem, IdentityItem } from '@/types/vault';
 
 interface VaultItemDetailProps {
@@ -14,6 +14,15 @@ export default function VaultItemDetail({ item, onClose, onEdit, onDelete }: Vau
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+
+  const handleEscape = useCallback((e: KeyboardEvent) => {
+    if (e.key === 'Escape') onClose();
+  }, [onClose]);
+
+  useEffect(() => {
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
+  }, [handleEscape]);
 
   async function copyToClipboard(value: string, field: string) {
     await navigator.clipboard.writeText(value);
@@ -82,8 +91,8 @@ export default function VaultItemDetail({ item, onClose, onEdit, onDelete }: Vau
   const data = item.data;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/30 p-4 pt-16 backdrop-blur-sm">
-      <div className="w-full max-w-lg rounded-sm border border-[#1b4965]/15 bg-[#fcfbf8] shadow-lg">
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/30 p-4 pt-16 backdrop-blur-sm" onClick={onClose}>
+      <div className="w-full max-w-lg rounded-sm border border-[#1b4965]/15 bg-[#fcfbf8] shadow-lg" onClick={(e) => e.stopPropagation()}>
         {/* Header */}
         <div className="flex items-center justify-between border-b border-[#1b4965]/15 px-6 py-4">
           <div>

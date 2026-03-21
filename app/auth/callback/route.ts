@@ -4,7 +4,10 @@ import { NextResponse } from 'next/server';
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get('code');
-  const next = searchParams.get('next') ?? '/dashboard';
+  // Validate redirect target to prevent open redirect attacks
+  const rawNext = searchParams.get('next') ?? '/dashboard';
+  const allowedPaths = ['/dashboard', '/setup', '/settings', '/documents'];
+  const next = allowedPaths.includes(rawNext) ? rawNext : '/dashboard';
 
   if (code) {
     const supabase = await createServerSupabaseClient();

@@ -45,9 +45,11 @@ const plans = [
 
 export default function PricingCards({ currentPlan, onManageBilling }: PricingCardsProps) {
   const [loading, setLoading] = useState<string | null>(null);
+  const [error, setError] = useState('');
 
   async function handleUpgrade(priceKey: string) {
     setLoading(priceKey);
+    setError('');
     try {
       const res = await fetch('/api/stripe/checkout', {
         method: 'POST',
@@ -58,10 +60,10 @@ export default function PricingCards({ currentPlan, onManageBilling }: PricingCa
       if (data.url) {
         window.location.href = data.url;
       } else {
-        alert(data.error || 'Failed to start checkout');
+        setError(data.error || 'Failed to start checkout');
       }
     } catch {
-      alert('Failed to start checkout');
+      setError('Failed to start checkout');
     } finally {
       setLoading(null);
     }
@@ -69,6 +71,11 @@ export default function PricingCards({ currentPlan, onManageBilling }: PricingCa
 
   return (
     <div className="space-y-4">
+      {error && (
+        <div className="rounded-sm border border-[#e76f51]/30 bg-[#e76f51]/10 px-4 py-3 text-sm text-[#e76f51]">
+          {error}
+        </div>
+      )}
       <div className="grid gap-4 sm:grid-cols-2 max-w-2xl">
         {plans.map((plan) => {
           const isCurrent = plan.id === currentPlan;
@@ -141,7 +148,7 @@ export default function PricingCards({ currentPlan, onManageBilling }: PricingCa
           onClick={onManageBilling}
           className="mt-2 text-sm text-[#5fa8a0] underline hover:text-[#4d8f87]"
         >
-          Manage subscription &amp; billing in Stripe
+          Manage subscription & billing in Stripe
         </button>
       )}
 

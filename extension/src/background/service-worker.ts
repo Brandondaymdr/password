@@ -9,10 +9,23 @@ import { deriveVaultKey, decryptItem, verifyVaultKey, encryptItem, generateSearc
 import { unlock, lock, getVaultKey, isUnlocked, getItemCount, setItemCount } from '../shared/vault-session';
 import type { VaultStatus, VaultItemRow, DecryptedVaultItem, LoginItem, ExtensionMessage, PasswordOptions } from '../shared/types';
 
+// Brute-force protection for master password unlock
+let failedUnlockAttempts = 0;
+const MAX_UNLOCK_ATTEMPTS = 5;
+const LOCKOUT_DURATION_MS = 60_000; // 1 minute
+let lockoutUntil = 0;
+
 // --- Message Handler ---
 
 chrome.runtime.onMessage.addListener(
-  (message: ExtensionMessage, _sender, sendResponse) => {
+  (message: ExtensionMessage, sender, sendResponse) => {
+    // Only allow content scripts to send specific safe message types
+    const CONTENT_SCRIPT_ALLOWED: string[] = ['FORM_DETECTED', 'SAVE_OFFER', 'CAPTURE_CREDENTIALS'];
+    if (sender.tab && !CONTENT_SCRIPT_ALLOWED.includes(message.type)) {
+      sendResponse({ error: 'Unauthorized message from content script' });
+      return;
+    }
+
     handleMessage(message)
       .then(sendResponse)
       .catch((err) => {
@@ -118,6 +131,12 @@ async function handleLogout() {
 // --- Vault Unlock ---
 
 async function handleUnlock(payload: { masterPassword: string }) {
+  // Rate limiting: check lockout
+  if (Date.now() < lockoutUntil) {
+    const remainingSeconds = Math.ceil((lockoutUntil - Date.now()) / 1000);
+    return { error: `Too many failed attempts. Try again in ${remainingSeconds} seconds.` };
+  }
+
   const supabase = getSupabase();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: 'Not authenticated' };
@@ -148,7 +167,17 @@ async function handleUnlock(payload: { masterPassword: string }) {
     vaultKey
   );
 
-  if (!isValid) return { error: 'Incorrect master password' };
+  if (!isValid) {
+    failedUnlockAttempts++;
+    if (failedUnlockAttempts >= MAX_UNLOCK_ATTEMPTS) {
+      lockoutUntil = Date.now() + LOCKOUT_DURATION_MS;
+      failedUnlockAttempts = 0;
+    }
+    return { error: 'Incorrect master password' };
+  }
+
+  // Reset failed attempts on successful unlock
+  failedUnlockAttempts = 0;
 
   // Count vault items
   const { count } = await supabase

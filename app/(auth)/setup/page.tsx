@@ -116,6 +116,10 @@ export default function SetupPage() {
         .update(profileUpdate)
         .eq('id', user.id);
 
+      // Clear master password from React state immediately after key derivation
+      setMasterPassword('');
+      setConfirmMaster('');
+
       // Redirect to dashboard — vault is now unlocked
       router.push('/dashboard');
       router.refresh();

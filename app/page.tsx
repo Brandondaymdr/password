@@ -127,7 +127,7 @@ export default function LandingPage() {
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-[#5fa8a0]">✓</span>
-                  <span>Perfect for families &amp; teams</span>
+                  <span>Perfect for families & teams</span>
                 </li>
               </ul>
               <Link href="/signup" className="block w-full rounded-sm border border-[#1b4965]/15 px-4 py-3 text-center font-medium text-[#1b4965] transition-colors hover:bg-[#1b4965]/5">
@@ -143,7 +143,7 @@ export default function LandingPage() {
 
       {/* Footer */}
       <footer className="border-t border-[#1b4965]/15 px-6 py-12 bg-white">
-        <div className="mx-auto max-w-6xl flex items-center justify-between">
+        <div className="mx-auto max-w-6xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div>
             <div className="flex items-center gap-2 mb-2">
               <ShorestackLogo variant="mark" size="sm" />
@@ -151,9 +151,13 @@ export default function LandingPage() {
             </div>
             <p className="text-sm text-[#1b4965]/60">Business tools that just make sense.</p>
           </div>
-          <p className="text-sm text-[#1b4965]/60">
-            Copyright 2026 Days Management LLC
-          </p>
+          <div className="text-sm text-[#1b4965]/60 text-right">
+            <div className="flex gap-4 mb-1">
+              <Link href="/privacy" className="hover:text-[#5fa8a0]">Privacy Policy</Link>
+              <Link href="/terms" className="hover:text-[#5fa8a0]">Terms of Service</Link>
+            </div>
+            <p>Copyright {new Date().getFullYear()} Days Management LLC</p>
+          </div>
         </div>
       </footer>
     </div>

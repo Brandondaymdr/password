@@ -39,7 +39,7 @@ export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
 
   // Public routes that don't require auth
-  const publicRoutes = ['/login', '/signup', '/auth/callback', '/api/stripe/webhook'];
+  const publicRoutes = ['/login', '/signup', '/auth/callback', '/api/stripe/webhook', '/privacy', '/terms'];
   const isPublicRoute = pathname === '/' || publicRoutes.some((route) => pathname.startsWith(route));
 
   // PWA assets must be accessible without auth for install/offline support

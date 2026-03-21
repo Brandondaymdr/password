@@ -165,17 +165,21 @@ shorestack-vault/
 │   │   ├── signup/page.tsx
 │   │   └── setup/page.tsx              ← master password setup flow
 │   ├── (vault)/
-│   │   ├── dashboard/page.tsx          ← vault list + BiometricUnlock + PWAInstallPrompt
+│   │   ├── dashboard/page.tsx          ← vault list + brute-force protection + PWAInstallPrompt
 │   │   ├── documents/page.tsx
-│   │   └── settings/page.tsx           ← BiometricEnroll wired in
+│   │   └── settings/page.tsx           ← atomic rekey, export re-auth, biometric disabled
 │   ├── api/
+│   │   ├── account/
+│   │   │   └── delete/route.ts         ← account deletion + Stripe cancellation
 │   │   ├── stripe/
 │   │   │   ├── checkout/route.ts       ← creates Stripe Checkout sessions
 │   │   │   ├── webhook/route.ts        ← handles subscription lifecycle events
 │   │   │   └── portal/route.ts         ← Stripe Customer Portal redirect
-│   │   └── audit/route.ts
+│   │   └── audit/route.ts             ← server-side audit logging (IP/user agent capture)
 │   ├── auth/callback/route.ts          ← Supabase email confirmation handler
 │   ├── manifest.ts                     ← PWA web manifest (generates /manifest.webmanifest)
+│   ├── privacy/page.tsx                ← Privacy Policy
+│   ├── terms/page.tsx                  ← Terms of Service
 │   ├── page.tsx                        ← Landing page (hero, features, pricing, footer)
 │   ├── layout.tsx                      ← Root layout (Inter + JetBrains Mono, Sand bg, PWA meta)
 │   └── globals.css                     ← Brand theme (CSS vars, utility classes)
@@ -199,12 +203,11 @@ shorestack-vault/
 │   ├── stripe.ts                       ← Lazy-init Stripe client, price IDs, plan mapper
 │   ├── plan-enforcement.ts             ← Plan limit checks (items, storage, audit)
 │   ├── vault-session.ts                ← In-memory vault key with 15min auto-lock
-│   ├── vault-cache.ts                  ← IndexedDB encrypted vault cache (offline support)
-│   ├── vault-sync.ts                   ← Online/offline sync between Supabase and IndexedDB
+│   ├── audit.ts                        ← Client-side helper to POST audit events to /api/audit
 │   ├── webauthn.ts                     ← WebAuthn registration + authentication helpers
 │   └── biometric-key.ts               ← Vault key wrapping/unwrapping for biometric unlock
 ├── public/
-│   ├── sw.js                           ← Service worker (cache-first/network-first/stale-while-revalidate)
+│   ├── sw.js                           ← Service worker (cache-first/stale-while-revalidate, no Supabase caching)
 │   ├── icon-180.png                    ← Apple touch icon
 │   ├── icon-192.png                    ← Android PWA icon
 │   ├── icon-192-maskable.png           ← Android maskable icon
@@ -316,12 +319,15 @@ VITE_SUPABASE_ANON_KEY=<anon key>
 - [x] Phase 13: Shorestack branding + landing page
 - [x] Phase 14: Browser extension (Chrome MV3, Manifest V3)
 - [x] Phase 15: PWA + biometric unlock (WebAuthn, IndexedDB offline cache)
+- [x] Security Audit: 31 fixes (7 critical, 10 high, 14 medium) — see `FORENSIC-AUDIT-2026-03-21.md`
 
 **GitHub commits (main branch):**
 - `5fc72ba` — Pre-Phase 14 cleanup (assessment fixes)
 - `ff223c0` — Phase 14: Browser extension (30 files)
 - `e7a956c` — URL validation fix (type="url" → type="text" + auto-prepend https://)
 - `16b5e74` — Phase 15: PWA + Biometric Unlock (20 files)
+- `6ee9a0e` — Audit round 1-4 fixes (encryption, auth, security headers, extension save flow)
+- `3f59c6d` — Forensic audit: 31 security fixes (7 critical, 10 high, 14 medium)
 
 ---
 
@@ -376,34 +382,24 @@ Load unpacked from `extension/dist/` in `chrome://extensions` (Developer mode on
 
 ## Phase 15: PWA + Biometric Architecture
 
-**PWA Stack:** Vanilla service worker (`public/sw.js`), IndexedDB (`lib/vault-cache.ts`)
-**Biometric Stack:** WebAuthn API (platform authenticators: Touch ID, Face ID, Windows Hello)
-**Status:** Complete — DB migration applied, components wired into Settings + Dashboard
+**PWA Stack:** Vanilla service worker (`public/sw.js`)
+**Biometric Stack:** WebAuthn API — **DISABLED pending server-side verification**
+**Status:** PWA caching works. Offline vault access NOT implemented (future feature). Biometric enrollment disabled in UI.
 
 **Service worker caching strategies (`public/sw.js`):**
-- **Supabase API calls:** Network-first with cache fallback
+- **Supabase API calls:** Never cached (security: prevents XSS exfiltration of kdf_salt/tokens)
 - **Static assets (images, fonts, CSS):** Cache-first
 - **App pages and JS:** Stale-while-revalidate
 - Pre-caches app shell on install. Skips non-GET requests.
 
-**IndexedDB architecture (`lib/vault-cache.ts`):**
-- Two object stores: `vault_items` (keyPath: id, indexes: user_id, item_type) and `metadata`
-- Stores ONLY encrypted ciphertext (same blobs as Supabase, never plaintext)
-- `synced: boolean` flag on each item for offline change tracking
-- Cache functions: `getCachedItems()`, `cacheItems()`, `cacheItem()`, `deleteCachedItem()`, `getUnsyncedItems()`
+**Offline vault access:** Not yet implemented. IndexedDB cache and sync modules were removed as dead code during the March 2026 security audit. When implementing offline support, create new modules with proper cross-user isolation and sync conflict resolution.
 
-**Sync logic (`lib/vault-sync.ts`):**
-- Online: Fetch from Supabase → push unsynced local items → cache everything in IndexedDB
-- Offline: Return cached items from IndexedDB
-- Reconnect: `setupSyncListeners()` watches `navigator.onLine` changes
-
-**WebAuthn enrollment (`lib/webauthn.ts` + `components/vault/BiometricEnroll.tsx`):**
-1. User clicks "Enable Biometric Unlock" in Settings
-2. Component prompts for master password (needed to wrap vault key)
-3. `navigator.credentials.create()` with `authenticatorAttachment: 'platform'`, `userVerification: 'required'`
-4. Vault key re-derived as EXTRACTABLE (one-time), raw bytes encrypted with vault key itself (AES-256-GCM)
-5. Encrypted blobs + credential ID + public key stored in `profiles` table
-6. Audit event `biometric_enrolled` logged
+**WebAuthn / Biometric (DISABLED):**
+- `BiometricEnroll` component exists but is commented out in settings + dashboard
+- `BiometricUnlock` component exists but is commented out in dashboard
+- Reason: WebAuthn challenges are generated client-side with no server verification
+- TODO: Implement server-side WebAuthn ceremony before re-enabling
+- DB columns (`webauthn_credential_id`, `webauthn_public_key`, etc.) are in place for future use
 
 **Biometric unlock (`lib/biometric-key.ts` + `components/vault/BiometricUnlock.tsx`):**
 - Shows on Dashboard lock screen when `profile.webauthn_credential_id` exists
