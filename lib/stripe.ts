@@ -19,10 +19,10 @@ export function getStripe(): Stripe {
 
 // Price IDs — set these after creating products in Stripe Dashboard
 export const PRICE_IDS = {
-  personal_monthly: process.env.STRIPE_PERSONAL_MONTHLY_PRICE_ID || '',
-  personal_yearly: process.env.STRIPE_PERSONAL_YEARLY_PRICE_ID || '',
-  plus_monthly: process.env.STRIPE_PLUS_MONTHLY_PRICE_ID || '',
-  plus_yearly: process.env.STRIPE_PLUS_YEARLY_PRICE_ID || '',
+  personal_monthly: process.env.STRIPE_INDIVIDUAL_MONTHLY_PRICE_ID || '',
+  personal_yearly: process.env.STRIPE_INDIVIDUAL_YEARLY_PRICE_ID || '',
+  plus_monthly: process.env.STRIPE_TEAM_MONTHLY_PRICE_ID || '',
+  plus_yearly: process.env.STRIPE_TEAM_YEARLY_PRICE_ID || '',
 } as const;
 
 export type PriceKey = keyof typeof PRICE_IDS;
